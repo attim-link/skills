@@ -21,7 +21,7 @@ npx skills add attim-link/skills --skill attim
 View on skills.sh:
 
 ```txt
-https://www.skills.sh/attim-link/skills/skill/attim
+https://www.skills.sh/attim-link/skills/attim
 ```
 
 Repository path:
