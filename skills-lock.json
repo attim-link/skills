@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "attim": {
+      "source": "attim-link/skills",
+      "sourceType": "github",
+      "skillPath": "attim/SKILL.md",
+      "computedHash": "441ff0fae048e2c7b99380c2a33869e2b362c3909a1f95836df6ab5aa27444c7"
+    }
+  }
+}
