@@ -34,27 +34,31 @@ https://github.com/attim-link/skills/tree/main/attim
 
 - Publish a new static site from a folder or single HTML file
 - Update an existing site without changing its URL
+- Clone or fork an existing anonymous site
+- Claim anonymous sites into the account
 - Preserve anonymous `claimToken` handoff fields
 - Use claimed/permanent sites through `attim login`
 - Configure password protection
 - Configure public variables
-- Configure x402 paywalls for claimed sites
+- Target workspaces
 - Use ATTIM MCP when the host agent supports MCP
 - Fall back to the raw HTTP API when CLI/MCP are unavailable
 
-## Bundled helper
+## Bundled helpers
 
 After install, agents can run:
 
 ```bash
 ./scripts/publish.sh ./dist
+./scripts/update.sh my-site ./dist
+./scripts/login.sh
+./scripts/claim.sh my-site
 ```
 
-The helper delegates to the official ATTIM CLI. It uses an installed `attim` binary when available, otherwise it runs `npx -y attim`.
+Each helper delegates to the official ATTIM CLI. It uses an installed `attim` binary when available, otherwise it runs `npx -y attim`.
 
 ## Product docs
 
 - ATTIM docs: https://attim.link/docs
-- Public skill document: https://attim.link/skill.md
 - LLM reference: https://attim.link/llms.txt
 - MCP endpoint: https://attim.link/mcp

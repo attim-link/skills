@@ -4,16 +4,17 @@ description: >
   ATTIM lets agents publish static artifacts to live URLs at {slug}.attim.link.
   Use it for generated demos, reports, dashboards, browser-only tools, microsites,
   docs previews, decks, and static app builds that need a shareable URL. Supports
-  anonymous 24-hour publishes, claimed permanent sites, updates that keep the same
-  URL, password protection, public variables, x402 paywalls, CLI publishing, MCP
-  tools, and raw API fallback. Use when asked to "publish this", "host this static
-  site", "share this HTML", "put this demo online", "update this ATTIM site",
-  "protect this page", "add public variables", "add an x402 paywall", or "use ATTIM".
+  anonymous 12-hour publishes, claimed permanent sites, updates that keep the same
+  URL, password protection, public variables, cloning and forking, workspaces, CLI
+  publishing, MCP tools, and raw API fallback. Use when asked to "publish this",
+  "host this static site", "share this HTML", "put this demo online", "update this
+  ATTIM site", "protect this page", "add public variables", "clone or fork this
+  ATTIM site", or "use ATTIM".
 ---
 
 # ATTIM
 
-**Skill version: 1.1.0**
+**Skill version: 2.0.0**
 
 ATTIM lets agents publish static artifacts to live URLs at `{slug}.attim.link`.
 
@@ -38,7 +39,7 @@ Before answering detailed questions about ATTIM capabilities, features, limits, 
 Also check:
 
 - LLM reference: https://attim.link/llms.txt
-- Public skill document: https://attim.link/skill.md
+- Full LLM reference: https://attim.link/llms-full.txt
 - MCP endpoint: https://attim.link/mcp
 - Base URL: https://attim.link
 
@@ -57,23 +58,23 @@ If docs and live API behavior disagree, trust the live API behavior and report t
 - Optional installed CLI: `npm install -g attim`
 - Optional account token from `attim login` or `ATTIM_API_TOKEN`
 - Optional anonymous claim token from previous publish output or `ATTIM_CLAIM_TOKEN`
-- Bundled helper: `./scripts/publish.sh`
+- Bundled helpers in `./scripts/`: `publish.sh`, `update.sh`, `login.sh`, `claim.sh`
 
-The helper delegates to the official CLI. It uses a globally installed `attim` binary when available, otherwise it falls back to `npx -y attim`.
+Every helper delegates to the official CLI. Each uses a globally installed `attim` binary when available, otherwise it falls back to `npx -y attim`.
 
 ## Choose the right path
 
 Prefer the simplest path that can finish the job:
 
-1. **CLI:** use `npx attim publish` or `./scripts/publish.sh` when shell and npm are available.
+1. **CLI:** use `npx attim` or the bundled `./scripts/*.sh` helpers when shell and npm are available.
 2. **MCP:** use `https://attim.link/mcp` when the host agent already has MCP support and passing inline files is easier than shelling out.
 3. **Raw API:** use HTTP only when CLI and MCP are unavailable, or when you need explicit control over manifest, upload, and finalize.
 
 Do not start with the raw API unless there is a reason. The CLI already handles manifest creation, uploads, retries, local claim-token storage, and finalization.
 
-## Publish a new site
+## CLI quick start
 
-Use the helper:
+Publish a directory:
 
 ```bash
 ./scripts/publish.sh ./dist
@@ -91,110 +92,91 @@ For a single HTML file:
 npx attim publish index.html
 ```
 
-For a password-protected anonymous publish:
+A successful publish prints the live URL on the first line. Directory publishes require `index.html` at the root of the directory being published. Single-file publishes are uploaded as `index.html`.
+
+## Command reference
+
+### Authentication
 
 ```bash
+npx attim login                      # interactive email-code login; creates or rotates an account API token
+npx attim login --rotate             # explicit rotation for scripted flows
+npx attim login --token attim_uat_...  # store a token you already saved, without rotating
+npx attim whoami                     # verify the stored token
+npx attim logout                     # remove the local token (does not revoke it server-side)
+```
+
+- `attim login` stores an account API token locally at `~/.config/attim/config.json` (override with `ATTIM_CONFIG_DIR`).
+- If the account already has an active token, `attim login` rotates it because ATTIM cannot reveal an existing raw token again.
+- `attim logout` does not revoke the server-side token; revoke it from `/settings/advanced` if needed.
+
+### Publish
+
+```bash
+npx attim publish ./dist
+npx attim publish index.html
+npx attim publish ./dist --slug my-site                    # owned site; requires account auth
 npx attim publish ./dist --password "secret-password" --password-access-ttl 86400
+npx attim publish ./dist --ttl 43200                        # anonymous TTL in seconds (60 to 43200)
+npx attim publish ./dist --workspace 1                      # publish into a workspace
+npx attim publish ./dist --no-finalize                      # upload but leave the version pending
+npx attim publish ./dist --dry-run                          # validate locally, no network calls
+npx attim publish ./dist --json                             # machine-readable JSON on stdout
 ```
 
-A successful publish prints the live URL. Directory publishes require `index.html` at the root of the directory being published. Single-file publishes are uploaded as `index.html`.
+- Anonymous publishes receive generated slugs; explicit `--slug` requires account authentication.
+- Owned sites are permanent; anonymous sites expire after up to 12 hours.
+- `--no-finalize` requires a later `finalize` command to make the version live.
 
-## Publish to an owned slug
-
-Sign in first:
-
-```bash
-npx attim login
-npx attim whoami
-```
-
-Then publish with an explicit slug:
-
-```bash
-npx attim publish ./dist --slug my-site
-```
-
-The live URL will be:
-
-```text
-https://my-site.attim.link/
-```
-
-Explicit slugs require account authentication. Anonymous publishes receive generated slugs.
-
-## Update an existing site
-
-For claimed or authenticated sites:
-
-```bash
-npx attim update my-site ./dist
-```
-
-For anonymous sites when you have the claim token:
-
-```bash
-npx attim update my-site ./dist --claim-token ANONYMOUS_CLAIM_TOKEN
-```
+### Update an existing site
 
 Use update when the user wants to keep the same URL. Do not create a new slug unless the user explicitly asks for a separate publish.
 
-## Authentication and ownership
-
-ATTIM has two management modes:
-
-- **Anonymous publish:** returns a generated slug and a one-time `claimToken`. The site can be managed later only if the claim token is preserved.
-- **Claimed site:** belongs to an account API token created by `attim login`. Claimed sites can use explicit slugs, listing, variables, paywalls, and account-owned operations.
-
-Run login interactively when the user wants permanent account-owned sites:
-
 ```bash
-npx attim login
+npx attim update my-site ./dist                             # owned site using stored token
+npx attim update my-site ./dist --claim-token ANONYMOUS_CLAIM_TOKEN   # anonymous site
+npx attim update my-site ./dist --dry-run
+npx attim update my-site ./dist --no-finalize
 ```
 
-Credential precedence for account operations:
+### Clone and fork
 
-1. `--token <token>`
-2. `ATTIM_API_TOKEN`
-3. token saved by `attim login`
+```bash
+npx attim clone source-site --ttl 43200                     # anonymous copy with a new claim token
+npx attim fork source-site --slug my-copy                   # owned copy; requires account auth
+npx attim fork source-site --workspace 1                    # owned copy into a workspace
+```
 
-Credential precedence for anonymous management:
+- `clone` creates a new anonymous site with independent storage and its own one-time `claimToken`.
+- `fork` copies the source into your account as a permanent owned site.
+- Copies include static files and basic metadata, not passwords or source claim tokens.
 
-1. `--claim-token <token>`
-2. `ATTIM_CLAIM_TOKEN`
-3. the CLI's locally saved claim token from an earlier publish
+### Lifecycle commands
 
-Important auth behavior:
+```bash
+npx attim finalize my-site 12 --claim-token ANONYMOUS_CLAIM_TOKEN
+npx attim delete my-site --token attim_uat_...
+npx attim info my-site
+npx attim list
+npx attim list --workspace 1
+```
 
-- `attim login` stores an account API token locally.
-- If the account already has an active token, login rotates it because ATTIM cannot reveal an existing raw token again.
-- `attim login --token attim_uat_...` stores a token you already have without rotating.
-- `attim logout` removes the local token. It does not revoke the server-side token.
-- Never print, commit, or paste account tokens into public files.
+- Anonymous sites require `--claim-token` or `ATTIM_CLAIM_TOKEN` for finalize and delete.
+- Claimed sites require an account API token (stored, `--token`, or `ATTIM_API_TOKEN`).
 
-## Required handoff to the user
+### Claim anonymous sites
 
-A publish is not complete until the user receives the fields needed to open and control the site later.
+```bash
+npx attim claim my-site
+npx attim claim --all
+npx attim claim my-site --workspace 1
+```
 
-For anonymous publishes, return:
+Claiming converts an anonymous site into an owned site. The CLI reuses the locally saved claim token from the original publish. After claiming, the site becomes permanent and account-managed.
 
-- `siteUrl`
-- `slug`
-- whether finalization succeeded
-- `claimToken` if the tool returned it
-- expiry information if present
+### Public variables
 
-For claimed-site publishes or mutations, return:
-
-- `siteUrl`
-- `slug`
-- operation performed
-- auth context used, without exposing secrets
-
-If command output is long or may be truncated, print or save the handoff fields separately before continuing with optional cleanup or explanation.
-
-## Public variables
-
-Public variables let claimed sites change browser-visible values without re-uploading files.
+Public variables let claimed sites change browser-visible values without re-uploading files. Placeholders like `{{ vars.PRODUCT_NAME }}` in text files are replaced at serve time.
 
 ```bash
 npx attim variables list my-site
@@ -202,70 +184,129 @@ npx attim variables set my-site PRODUCT_NAME "Acme Analytics"
 npx attim variables delete my-site PRODUCT_NAME
 ```
 
-Use variables only for values that are safe to expose in source, JavaScript, stylesheets, network responses, and browser devtools.
+Use variables only for values that are safe to expose in source, JavaScript, stylesheets, network responses, and browser devtools. Never store passwords, API keys, private URLs, database strings, or other secrets in public variables.
 
-Placeholders use this form:
-
-```text
-{{ vars.PRODUCT_NAME }}
-```
-
-Never store passwords, API keys, private URLs, database strings, or other secrets in public variables.
-
-## Password protection
+### Password protection
 
 Password protection works for anonymous and claimed sites.
 
-Enable during publish:
-
 ```bash
+# Enable during publish
 npx attim publish ./dist --password "secret-password" --password-access-ttl 86400
-```
 
-Enable on a claimed site:
-
-```bash
+# Enable on a claimed site
 npx attim password enable my-site "secret-password" --access-ttl 86400
-```
 
-Enable on an anonymous site:
-
-```bash
+# Enable on an anonymous site
 npx attim password enable my-site "secret-password" --claim-token ANONYMOUS_CLAIM_TOKEN --access-ttl 86400
-```
 
-Disable:
-
-```bash
+# Disable
 npx attim password disable my-site
 ```
 
-Do not invent or reveal passwords in summaries. If a password is user-provided, acknowledge that protection is enabled without repeating the secret unless the user explicitly needs it restated.
+- `--access-ttl` (or `--password-access-ttl` at publish time) controls how long a successful password unlock lasts, in seconds. If omitted, ATTIM chooses the duration.
+- Do not invent or reveal passwords in summaries. If a password is user-provided, acknowledge that protection is enabled without repeating the secret unless the user explicitly needs it restated.
 
-## x402 paywalls
-
-x402 paywalls require a claimed site and a configured payment wallet.
-
-Set or inspect the wallet:
+### Diagnostics
 
 ```bash
-npx attim wallet
-npx attim wallet set 0x0000000000000000000000000000000000000001 --network eip155:8453
+npx attim doctor      # checks local Node support, API reachability, config location, and token validity
+npx attim whoami      # verifies the stored account token
+npx attim list        # lists owned sites visible to the saved token
 ```
 
-Enable a paywall:
+## Global options
+
+| Option | Meaning |
+| --- | --- |
+| `--base-url <url>` | ATTIM base URL. Defaults to `https://attim.link` or `ATTIM_BASE_URL`. |
+| `--token <token>` | Account API token. Defaults to `ATTIM_API_TOKEN`, then the token saved by `attim login`. |
+| `--claim-token <token>` | Anonymous site management token. Defaults to `ATTIM_CLAIM_TOKEN`. |
+| `--ttl <seconds>` | TTL for anonymous publishes or clones, from 60 to 43200 seconds. |
+| `--slug <slug>` | Explicit destination slug for authenticated publishes or forks. |
+| `--workspace <id>` | Target workspace for publish, fork, list, and claim. |
+| `--access-ttl <seconds>` | Password unlock duration for `password enable`. |
+| `--password-access-ttl <seconds>` | Password unlock duration when enabling protection during publish. |
+| `--json` | Machine-readable JSON on stdout. |
+| `--no-finalize` | Leave the version pending for a separate finalize. |
+| `--dry-run` | Build and validate locally without API or upload calls. |
+| `--rotate` | Explicitly rotate the account API token during login. |
+| `--all` | Apply the command to all stored anonymous sites (claim). |
+| `--help` / `--version` | Show usage or the CLI version. |
+
+Environment variables: `ATTIM_API_TOKEN`, `ATTIM_CLAIM_TOKEN`, `ATTIM_BASE_URL`, `ATTIM_CONFIG_DIR`.
+
+Credential precedence for account operations: `--token` → `ATTIM_API_TOKEN` → token saved by `attim login`.
+
+Credential precedence for anonymous management: `--claim-token` → `ATTIM_CLAIM_TOKEN` → the CLI's locally saved claim token from an earlier publish.
+
+## Scenario playbook
+
+### Publish a demo for someone to open
 
 ```bash
-npx attim paywall enable my-site 0.25 --network eip155:8453 --access-ttl 86400
+./scripts/publish.sh ./dist
 ```
 
-Disable a paywall:
+Hand back the live URL plus the anonymous handoff fields (slug, claimToken, expiry) if the user may want to update or delete it later.
+
+### Publish, regenerate, then update the same URL
 
 ```bash
-npx attim paywall disable my-site --network eip155:8453
+./scripts/publish.sh ./dist
+# ...user regenerates the build...
+./scripts/update.sh demo-slug ./dist
 ```
 
-Use the price in US dollars, for example `0.25` for 25 cents. Use CAIP-2 network IDs such as `eip155:8453` for Base.
+Do not create a second slug; the user asked to keep the URL.
+
+### Permanent owned site
+
+```bash
+./scripts/login.sh
+npx attim publish ./dist --slug my-site
+```
+
+Explicit slugs require account authentication. Owned sites never expire.
+
+### Protect a page
+
+```bash
+npx attim publish ./dist --password "user-chosen-password" --password-access-ttl 86400
+```
+
+For an already-published site, use `npx attim password enable <slug> <password> --claim-token <token>` or the stored account token.
+
+### Multi-environment variables on a claimed site
+
+```bash
+npx attim variables set my-site API_BASE_URL https://api.example.com
+```
+
+Placeholders (`{{ vars.API_BASE_URL }}`) are replaced at serve time. Only use values safe for public exposure.
+
+### Clone a demo into a workspace
+
+```bash
+npx attim fork source-site --workspace 1
+```
+
+Fork requires account authentication; the copy is owned and permanent.
+
+### CI publishing
+
+Export an account API token and publish without interaction:
+
+```bash
+export ATTIM_API_TOKEN=attim_uat_...
+npx attim publish ./dist --slug ci-preview
+```
+
+Never print or commit the token; use the CI secret store.
+
+### Claim token lost
+
+If the claim token for an anonymous site is gone, the site cannot be updated, deleted, or claimed — claim tokens are shown once and cannot be recovered from the slug. Publish a new site instead and preserve the new claim token.
 
 ## MCP workflow
 
@@ -275,26 +316,29 @@ ATTIM exposes Streamable HTTP MCP at:
 https://attim.link/mcp
 ```
 
-Account-authenticated MCP uses bearer auth:
+MCP tool calls require an account API token:
 
 ```text
 Authorization: Bearer attim_uat_...
 ```
 
+Anonymous MCP sessions are disabled in production; anonymous publishing is available through the CLI and API instead.
+
 MCP clients may receive a session token in the response body or `Mcp-Session-Token` header. Preserve it for later tool calls and close the session with `DELETE /mcp` when the client wants explicit cleanup.
 
-Available MCP tools include:
+Available MCP tools:
 
-- `publish_site`
-- `update_site`
-- `finalize_site`
-- `delete_site`
-- `list_sites`
-- `set_variables`
-- `set_password_protection`
-- `get_payment_wallet`
-- `set_payment_wallet`
-- `set_paywall`
+| Tool | Purpose | Requires account |
+| --- | --- | --- |
+| `publish_site` | Publish a new site from inline files | No (anonymous path disabled in production) |
+| `clone_site` | Clone an anonymous live site into a new anonymous site | No |
+| `fork_site` | Fork an anonymous site into an owned site | Yes |
+| `update_site` | Upload a new version for a site | Yes, or claim token |
+| `finalize_site` | Promote a pending version to live | Yes, or claim token |
+| `delete_site` | Delete a site | Yes, or claim token |
+| `list_sites` | List owned sites | Yes |
+| `set_variables` | Set public variables on an owned site | Yes |
+| `set_password_protection` | Enable, update, or disable password protection | Yes, or claim token |
 
 MCP file arguments are inline objects with `path` and either `content` or `contentBase64`. Root `index.html` is still required for static site publishes.
 
@@ -352,7 +396,7 @@ Minimal publish request:
       "contentType": "text/html; charset=utf-8"
     }
   ],
-  "ttlSeconds": 86400
+  "ttlSeconds": 43200
 }
 ```
 
@@ -371,20 +415,32 @@ Finalize anonymous site:
 POST   /api/publish
 GET    /api/publish/:slug
 PUT    /api/publish/:slug
-POST   /api/publish/:slug/finalize
 PATCH  /api/publish/:slug/metadata
 DELETE /api/publish/:slug
-GET    /api/publishes
-POST   /api/site-claims
+POST   /api/publish/:slug/finalize
+POST   /api/publish/:slug/clone
+POST   /api/publish/:slug/fork
+POST   /api/publish/:slug/claim
 POST   /api/publish/:slug/request-claim-link
+GET    /api/publishes
 GET    /api/publish/:slug/variables
+POST   /api/publish/:slug/variables
 PUT    /api/publish/:slug/variables/:name
 DELETE /api/publish/:slug/variables/:name
 PATCH  /api/publish/:slug/password-protection
-GET    /api/payment/wallet
-GET    /api/payment/wallets
-PUT    /api/payment/wallet
-PATCH  /api/publish/:slug/paywall
+POST   /api/auth/request-code
+POST   /api/auth/verify-code
+GET    /api/auth/me
+GET    /api/access/token
+POST   /api/access/token
+POST   /api/access/token/rotate
+DELETE /api/access/token
+GET    /api/plan
+GET    /api/public/plans
+GET    /api/workspaces
+GET    /api/analytics
+GET    /api/public/stats
+POST   /api/support-requests
 GET    /llms.txt
 POST   /mcp
 DELETE /mcp
@@ -397,33 +453,34 @@ DELETE /mcp
 - Single-file publishes are uploaded as `index.html`.
 - Maximum files per publish: `200`.
 - Maximum total publish size: `20 MiB`.
-- `ttlSeconds` default: `86400`; min `60`; max `604800`.
+- Anonymous `ttlSeconds`: default `43200` (12 hours); min `60`; max `43200`.
+- Owned sites are permanent and do not expire.
 - Paths must be relative and traversal-safe.
 - Duplicate normalized paths are rejected.
 - Finalize verifies uploaded files before promotion.
 
 Check live docs before treating these limits as permanent product facts.
 
-## Diagnostics
+## Required handoff to the user
 
-Before blaming ATTIM for a failed publish, run:
+A publish is not complete until the user receives the fields needed to open and control the site later.
 
-```bash
-npx attim doctor
-```
+For anonymous publishes, return:
 
-For local manifest validation without network publishing:
+- `siteUrl`
+- `slug`
+- whether finalization succeeded
+- `claimToken` if the tool returned it
+- expiry information if present
 
-```bash
-npx attim publish ./dist --dry-run
-```
+For claimed-site publishes or mutations, return:
 
-For account visibility:
+- `siteUrl`
+- `slug`
+- operation performed
+- auth context used, without exposing secrets
 
-```bash
-npx attim whoami
-npx attim list
-```
+If command output is long or may be truncated, print or save the handoff fields separately before continuing with optional cleanup or explanation.
 
 ## Pitfalls
 
@@ -433,9 +490,11 @@ npx attim list
 - Do not put secrets in public variables, uploaded static files, or client-side configuration.
 - Do not assume ATTIM runs backend code.
 - Do not use `--slug` without account authentication.
+- Do not use `--ttl` for owned sites; owned sites are permanent.
 - Do not create a new slug when the user asked to update an existing site.
 - Do not say a site is permanent unless it is claimed/authenticated or the command output confirms permanence.
 - Do not invent upload URLs, version IDs, claim tokens, or finalization results.
+- Never print, commit, or paste account tokens into public files.
 
 ## Quick copy block
 
