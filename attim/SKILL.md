@@ -5,16 +5,16 @@ description: >
   Use it for generated demos, reports, dashboards, browser-only tools, microsites,
   docs previews, decks, and static app builds that need a shareable URL. Supports
   anonymous 12-hour publishes, claimed permanent sites, updates that keep the same
-  URL, password protection, public variables, cloning and forking, workspaces, CLI
-  publishing, MCP tools, and raw API fallback. Use when asked to "publish this",
+  URL, password protection, public variables, cloning and forking, workspaces,
+  project version history, CLI publishing, MCP tools, and raw API fallback. Use when asked to "publish this",
   "host this static site", "share this HTML", "put this demo online", "update this
-  ATTIM site", "protect this page", "add public variables", "clone or fork this
+  ATTIM site", "rename or restore a version", "protect this page", "add public variables", "clone or fork this
   ATTIM site", or "use ATTIM".
 ---
 
 # ATTIM
 
-**Skill version: 2.0.0**
+**Skill version: 2.1.0**
 
 ATTIM lets agents publish static artifacts to live URLs at `{slug}.attim.link`.
 
@@ -47,7 +47,7 @@ Read the live docs:
 
 - at the first ATTIM-related interaction in a conversation
 - before saying a feature is unsupported
-- when the user asks about limits, auth, payments, variables, passwords, or MCP setup
+- when the user asks about limits, auth, payments, variables, passwords, version history, or MCP setup
 - when local skill text and live behavior appear to disagree
 
 If docs and live API behavior disagree, trust the live API behavior and report the mismatch.
@@ -163,6 +163,26 @@ npx attim list --workspace 1
 
 - Anonymous sites require `--claim-token` or `ATTIM_CLAIM_TOKEN` for finalize and delete.
 - Claimed sites require an account API token (stored, `--token`, or `ATTIM_API_TOKEN`).
+
+### Project versions
+
+Finalized uploads to an owned project create permanent version IDs. ATTIM retains the latest 10 finalized versions in one history per project, including Team projects. Optional names label versions without changing their IDs or files.
+
+```bash
+npx attim versions my-site
+npx attim rename-version my-site 12 "Before redesign"
+npx attim rename-version my-site 12 --clear
+npx attim preview my-site 12
+npx attim download my-site 12 --output my-site-12.zip
+npx attim restore my-site 12
+```
+
+- `versions` shows each retained ID, optional name, and which version is live.
+- Names must be one line and 1–120 characters. `--clear` removes a name.
+- `preview` prints a private, one-use URL. Open it within 60 seconds; its preview session lasts 15 minutes. Treat the URL as sensitive.
+- `download` saves a ZIP and will not overwrite an existing file.
+- `restore` copies the selected version's files into a **new, unnamed version ID** and makes that copy live. The source version and its name stay intact. If another publish changes the live version first, refresh the history and retry.
+- These commands require an account API token. Personal project owners can read, rename, and restore. Team owners and editors can read, rename, and restore; Team viewers can list, preview, and download. Frozen Team workspaces remain readable but cannot publish, rename, or restore. Removed members lose access.
 
 ### Claim anonymous sites
 
@@ -293,6 +313,15 @@ npx attim fork source-site --workspace 1
 
 Fork requires account authentication; the copy is owned and permanent.
 
+### Label an older version before a redesign
+
+```bash
+npx attim versions my-site
+npx attim rename-version my-site 12 "Before redesign"
+```
+
+Use the listed permanent ID. Renaming changes only the label. To return its files to the live site later, run `npx attim restore my-site 12`; this creates a new, unnamed version.
+
 ### CI publishing
 
 Export an account API token and publish without interaction:
@@ -337,10 +366,19 @@ Available MCP tools:
 | `finalize_site` | Promote a pending version to live | Yes, or claim token |
 | `delete_site` | Delete a site | Yes, or claim token |
 | `list_sites` | List owned sites | Yes |
+| `list_versions` | List retained versions and the live version ID for an owned project | Yes |
+| `rename_version` | Set or clear a retained version's name | Yes; owner or editor |
+| `preview_version` | Create a private preview link for a retained version | Yes |
+| `download_version` | Get an MCP resource link for a retained version's ZIP | Yes |
+| `restore_version` | Copy retained files into a new live version | Yes; owner or editor |
 | `set_variables` | Set public variables on an owned site | Yes |
 | `set_password_protection` | Enable, update, or disable password protection | Yes, or claim token |
 
 MCP file arguments are inline objects with `path` and either `content` or `contentBase64`. Root `index.html` is still required for static site publishes.
+
+For version tools, use the project `slug` and the permanent `versionId` returned by `list_versions({"slug":"my-site"})`. To name version 12, call `rename_version({"slug":"my-site","versionId":"12","name":"Before redesign"})`; pass `name: null` to clear it. `preview_version` returns a one-use URL. `download_version` returns an `attim://versions/{slug}/{versionId}/download` resource link; read that resource through the authenticated MCP session to receive the ZIP as base64 `application/zip` content. Do not treat the URI as a public download URL.
+
+Before `restore_version`, use `list_versions` to get `currentVersionId`, then call `restore_version({"slug":"my-site","versionId":"12","expectedCurrentVersionId":"<currentVersionId>"})`. The expected ID protects against overwriting a newer publish. On conflict, list again and ask the user to reconsider the now-current version before retrying.
 
 ## MCP setup examples
 
@@ -409,6 +447,19 @@ Finalize anonymous site:
 }
 ```
 
+Version history fallback for owned projects uses an account bearer token:
+
+```text
+GET    /api/publish/:slug/versions
+PATCH  /api/publish/:slug/versions/:versionId       {"name":"Before redesign"}
+PATCH  /api/publish/:slug/versions/:versionId       {"name":null}
+POST   /api/publish/:slug/versions/:versionId/preview
+GET    /api/publish/:slug/versions/:versionId/download
+POST   /api/publish/:slug/versions/:versionId/restore  {"expectedCurrentVersionId":"<currentVersionId>"}
+```
+
+Use `currentVersionId` from the list response for restore. Account bearer requests do not need browser CSRF headers. Browser-session mutations do require `X-ATTIM-CSRF`. The same owner/editor/viewer access rules apply as in the CLI.
+
 ## Main endpoints
 
 ```text
@@ -428,6 +479,11 @@ POST   /api/publish/:slug/variables
 PUT    /api/publish/:slug/variables/:name
 DELETE /api/publish/:slug/variables/:name
 PATCH  /api/publish/:slug/password-protection
+GET    /api/publish/:slug/versions
+PATCH  /api/publish/:slug/versions/:versionId
+POST   /api/publish/:slug/versions/:versionId/preview
+GET    /api/publish/:slug/versions/:versionId/download
+POST   /api/publish/:slug/versions/:versionId/restore
 POST   /api/auth/request-code
 POST   /api/auth/verify-code
 GET    /api/auth/me
@@ -494,6 +550,8 @@ If command output is long or may be truncated, print or save the handoff fields 
 - Do not create a new slug when the user asked to update an existing site.
 - Do not say a site is permanent unless it is claimed/authenticated or the command output confirms permanence.
 - Do not invent upload URLs, version IDs, claim tokens, or finalization results.
+- Do not reuse a preview URL or share it publicly; request a fresh preview when needed.
+- Do not restore from a stale `currentVersionId`; list versions again after a conflict.
 - Never print, commit, or paste account tokens into public files.
 
 ## Quick copy block
