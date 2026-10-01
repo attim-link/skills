@@ -365,6 +365,7 @@ Available MCP tools:
 | `update_site` | Upload a new version for a site | Yes, or claim token |
 | `finalize_site` | Promote a pending version to live | Yes, or claim token |
 | `delete_site` | Delete a site | Yes, or claim token |
+| `rename_site` | Change an owned site's slug | Yes; paid plan |
 | `list_sites` | List owned sites | Yes |
 | `list_versions` | List retained versions and the live version ID for an owned project | Yes |
 | `rename_version` | Set or clear a retained version's name | Yes; owner or editor |

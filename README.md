@@ -40,6 +40,7 @@ https://github.com/attim-link/skills/tree/main/attim
 - Use claimed/permanent sites through `attim login`
 - Configure password protection
 - Configure public variables
+- List, name, preview, download, and restore project versions
 - Target workspaces
 - Use ATTIM MCP when the host agent supports MCP
 - Fall back to the raw HTTP API when CLI/MCP are unavailable
