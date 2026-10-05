@@ -14,7 +14,7 @@ description: >
 
 # ATTIM
 
-**Skill version: 2.1.0**
+**Skill version: 2.2.0**
 
 ATTIM lets agents publish static artifacts to live URLs at `{slug}.attim.link`.
 
@@ -64,13 +64,27 @@ Every helper delegates to the official CLI. Each uses a globally installed `atti
 
 ## Choose the right path
 
-Prefer the simplest path that can finish the job:
+Choose by the location of the files and the requested operation. Check which tools the agent actually has.
 
-1. **CLI:** use `npx attim` or the bundled `./scripts/*.sh` helpers when shell and npm are available.
-2. **MCP:** use `https://attim.link/mcp` when the host agent already has MCP support and passing inline files is easier than shelling out.
-3. **Raw API:** use HTTP only when CLI and MCP are unavailable, or when you need explicit control over manifest, upload, and finalize.
+| Request | First choice | If unavailable |
+| --- | --- | --- |
+| Publish or update a local file, build folder, or many assets | CLI (`attim publish` / `attim update`) | Raw API upload flow |
+| Publish or update a small set of inline files already in the conversation | MCP (`publish_site` / `update_site`) | CLI if files are already on disk; otherwise raw API |
+| Clone or fork an existing site | MCP (`clone_site` / `fork_site`) | CLI `clone` / `fork` |
+| List owned sites or versions; rename, preview, download, restore, protect, or delete a remote site | Matching MCP tool | Matching CLI command |
+| Set a browser-visible public variable | MCP `set_variables` | CLI `variables set` |
+| Identify the connected account | MCP `get_profile` | CLI `whoami` |
+| Claim an anonymous site, inspect local CLI setup, or list/delete public variables | CLI or ATTIM web UI | Raw API where that operation is supported |
 
-Do not start with the raw API unless there is a reason. The CLI already handles manifest creation, uploads, retries, local claim-token storage, and finalization.
+Apply these rules before every ATTIM action:
+
+1. For local files, let the CLI read and upload the build directly. Do not copy a directory into MCP inline arguments. For files supplied in chat, use MCP without creating a local build solely to reach the CLI.
+2. For an owned-site MCP action, use the host's ATTIM OAuth connection. For an owned-site CLI action, use the CLI's stored account API token or its normal login flow. Do not paste either credential into site files or public variables.
+3. Publish to the account when the user is signed in through OAuth or the CLI. Use temporary **anonymous** publishing only without an account connection. Confirm that it sends no account credential; `--ttl` alone does not select anonymous publishing. Retain the returned `claimToken` for later anonymous mutations. If the CLI stored it locally, prefer the CLI for that site's update or claim.
+4. Choose one path for each mutation and inspect its result before any retry. Do not publish through both MCP and CLI for the same request. An entitlement error is not a reason to switch paths.
+5. Use the raw API only when no available MCP or CLI path can complete the operation, or when explicit manifest/upload/finalize control is required. Follow the same ownership, claim-token, and validation rules on that path.
+
+The MCP server has no `claim_site`, `doctor`, `info`, or public-variable list/delete tool today. Do not invent one.
 
 ## CLI quick start
 
@@ -116,8 +130,8 @@ npx attim logout                     # remove the local token (does not revoke i
 npx attim publish ./dist
 npx attim publish index.html
 npx attim publish ./dist --slug my-site                    # owned site; requires account auth
-npx attim publish ./dist --password "secret-password" --password-access-ttl 86400
-npx attim publish ./dist --ttl 43200                        # anonymous TTL in seconds (60 to 43200)
+npx attim publish ./dist --password "secret-password" --password-access-ttl 86400  # signed-in only
+npx attim publish ./dist --ttl 43200                        # expiry for a credential-free publish (60 to 43200 seconds)
 npx attim publish ./dist --workspace 1                      # publish into a workspace
 npx attim publish ./dist --no-finalize                      # upload but leave the version pending
 npx attim publish ./dist --dry-run                          # validate locally, no network calls
@@ -126,6 +140,7 @@ npx attim publish ./dist --json                             # machine-readable J
 
 - Anonymous publishes receive generated slugs; explicit `--slug` requires account authentication.
 - Owned sites are permanent; anonymous sites expire after up to 12 hours.
+- A saved CLI login makes `publish` an owned publish; `--ttl` is rejected for that publish.
 - `--no-finalize` requires a later `finalize` command to make the version live.
 
 ### Update an existing site
@@ -208,7 +223,7 @@ Use variables only for values that are safe to expose in source, JavaScript, sty
 
 ### Password protection
 
-Password protection works for anonymous and claimed sites.
+New password protection requires an account-owned site. A previously protected anonymous site can keep, update, or disable its existing protection with its claim token, but cannot newly enable protection.
 
 ```bash
 # Enable during publish
@@ -216,9 +231,6 @@ npx attim publish ./dist --password "secret-password" --password-access-ttl 8640
 
 # Enable on a claimed site
 npx attim password enable my-site "secret-password" --access-ttl 86400
-
-# Enable on an anonymous site
-npx attim password enable my-site "secret-password" --claim-token ANONYMOUS_CLAIM_TOKEN --access-ttl 86400
 
 # Disable
 npx attim password disable my-site
@@ -295,7 +307,7 @@ Explicit slugs require account authentication. Owned sites never expire.
 npx attim publish ./dist --password "user-chosen-password" --password-access-ttl 86400
 ```
 
-For an already-published site, use `npx attim password enable <slug> <password> --claim-token <token>` or the stored account token.
+For an already-published owned site, use `npx attim password enable <slug> <password>` with a stored account token.
 
 ### Multi-environment variables on a claimed site
 
@@ -345,21 +357,17 @@ ATTIM exposes Streamable HTTP MCP at:
 https://attim.link/mcp
 ```
 
-MCP tool calls require an account API token:
+For owned sites and account tools, connect an ATTIM account through the MCP host's OAuth sign-in flow. Clients without OAuth support can continue to use an account API token as a bearer token. Never place an account token in a chat message or public file.
 
-```text
-Authorization: Bearer attim_uat_...
-```
+Modern MCP clients use `server/discover` and send protocol metadata and authentication on each request; no MCP session is created. Older clients using `initialize` may receive a session token in the response body or `Mcp-Session-Token` header. Preserve it for later tool calls and close it with `DELETE /mcp` when needed. OAuth clients send their access token on each call.
 
-Anonymous MCP sessions are disabled in production; anonymous publishing is available through the CLI and API instead.
-
-MCP clients may receive a session token in the response body or `Mcp-Session-Token` header. Preserve it for later tool calls and close the session with `DELETE /mcp` when the client wants explicit cleanup.
+Anonymous MCP publishing works only after the server enables that path. Until then, use the credential-free CLI or API path. Do not silently substitute anonymous publishing for a signed-in user.
 
 Available MCP tools:
 
 | Tool | Purpose | Requires account |
 | --- | --- | --- |
-| `publish_site` | Publish a new site from inline files | No (anonymous path disabled in production) |
+| `publish_site` | Publish a new site from inline files | No when anonymous MCP is enabled; sign in for an owned site |
 | `clone_site` | Clone an anonymous live site into a new anonymous site | No |
 | `fork_site` | Fork an anonymous site into an owned site | Yes |
 | `update_site` | Upload a new version for a site | Yes, or claim token |
@@ -373,11 +381,12 @@ Available MCP tools:
 | `download_version` | Get an MCP resource link for a retained version's ZIP | Yes |
 | `restore_version` | Copy retained files into a new live version | Yes; owner or editor |
 | `set_variables` | Set public variables on an owned site | Yes |
-| `set_password_protection` | Enable, update, or disable password protection | Yes, or claim token |
+| `set_password_protection` | Enable or change owned-site protection; maintain grandfathered anonymous protection | Yes, or claim token for an already protected anonymous site |
+| `get_profile` | Identify the connected account | Yes |
 
-MCP file arguments are inline objects with `path` and either `content` or `contentBase64`. Root `index.html` is still required for static site publishes.
+MCP file arguments are inline objects with `path` and either `content` or `contentBase64`. Root `index.html` is still required for static site publishes. A temporary publish returns a one-time `claimToken`; pass it to later update, finalize, or delete calls. Preserve it for user handoff without adding it to public files.
 
-For version tools, use the project `slug` and the permanent `versionId` returned by `list_versions({"slug":"my-site"})`. To name version 12, call `rename_version({"slug":"my-site","versionId":"12","name":"Before redesign"})`; pass `name: null` to clear it. `preview_version` returns a one-use URL. `download_version` returns an `attim://versions/{slug}/{versionId}/download` resource link; read that resource through the authenticated MCP session to receive the ZIP as base64 `application/zip` content. Do not treat the URI as a public download URL.
+For version tools, use the project `slug` and the permanent `versionId` returned by `list_versions({"slug":"my-site"})`. To name version 12, call `rename_version({"slug":"my-site","versionId":"12","name":"Before redesign"})`; pass `name: null` to clear it. `preview_version` returns a one-use URL. `download_version` returns an `attim://versions/{slug}/{versionId}/download` resource link; read that resource with account authentication to receive the ZIP as base64 `application/zip` content. Do not treat the URI as a public download URL.
 
 Before `restore_version`, use `list_versions` to get `currentVersionId`, then call `restore_version({"slug":"my-site","versionId":"12","expectedCurrentVersionId":"<currentVersionId>"})`. The expected ID protects against overwriting a newer publish. On conflict, list again and ask the user to reconsider the now-current version before retrying.
 
