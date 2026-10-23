@@ -6,15 +6,17 @@ description: >
   docs previews, decks, and static app builds that need a shareable URL. Supports
   anonymous 12-hour publishes, claimed permanent sites, updates that keep the same
   URL, password protection, public variables, cloning and forking, workspaces,
-  project version history, CLI publishing, MCP tools, and raw API fallback. Use when asked to "publish this",
-  "host this static site", "share this HTML", "put this demo online", "update this
-  ATTIM site", "rename or restore a version", "protect this page", "add public variables", "clone or fork this
-  ATTIM site", or "use ATTIM".
+  project version history, the ATTIM profile (one public link-in-bio page per account with the user's links and
+  ATTIM projects, with click counts), custom link pages, CLI publishing, MCP tools, and raw API fallback. Use when
+  asked to "publish this", "host this static site", "share this HTML", "put this demo online", "update this ATTIM
+  site", "rename or restore a version", "protect this page", "add public variables", "make a link in bio page",
+  "make me a linktree", "set up my ATTIM profile", "show my projects on my profile", "bio link", "Instagram linkim",
+  "add or reorder my links", "clone or fork this ATTIM site", or "use ATTIM".
 ---
 
 # ATTIM
 
-**Skill version: 2.2.0**
+**Skill version: 2.6.0**
 
 ATTIM lets agents publish static artifacts to live URLs at `{slug}.attim.link`.
 
@@ -73,8 +75,13 @@ Choose by the location of the files and the requested operation. Check which too
 | Clone or fork an existing site | MCP (`clone_site` / `fork_site`) | CLI `clone` / `fork` |
 | List owned sites or versions; rename, preview, download, restore, protect, or delete a remote site | Matching MCP tool | Matching CLI command |
 | Set a browser-visible public variable | MCP `set_variables` | CLI `variables set` |
+| Set up the user's profile (link in bio, Linktree-style page) | MCP `create_profile` | CLI `profile create` |
+| Change the profile's name, bio, social icons, theme, language, handle, or projects | MCP `get_public_profile` / `update_profile` | CLI `profile show` / `profile set` / `profile theme` / `profile projects` |
+| Design a custom link page with your own markup (developers) | MCP `get_link_page_template`, then `publish_site`; or `create_link_page` | Publish the template from the docs, then CLI `links set` |
+| Add, edit, reorder, or count clicks on profile or link page links | MCP `list_links` / `set_links` / `get_link_stats` | CLI `links list` / `links set` / `links stats` |
 | Identify the connected account | MCP `get_profile` | CLI `whoami` |
-| Claim an anonymous site, inspect local CLI setup, or list/delete public variables | CLI or ATTIM web UI | Raw API where that operation is supported |
+| Keep (claim) a temporary site | MCP `claim_site` with its slug and `claimToken` | CLI `claim` |
+| Inspect local CLI setup, or list/delete public variables | CLI or ATTIM web UI | Raw API where that operation is supported |
 
 Apply these rules before every ATTIM action:
 
@@ -84,7 +91,7 @@ Apply these rules before every ATTIM action:
 4. Choose one path for each mutation and inspect its result before any retry. Do not publish through both MCP and CLI for the same request. An entitlement error is not a reason to switch paths.
 5. Use the raw API only when no available MCP or CLI path can complete the operation, or when explicit manifest/upload/finalize control is required. Follow the same ownership, claim-token, and validation rules on that path.
 
-The MCP server has no `claim_site`, `doctor`, `info`, or public-variable list/delete tool today. Do not invent one.
+The MCP server has no `doctor`, `info`, or public-variable list/delete tool today. Do not invent one.
 
 ## CLI quick start
 
@@ -113,15 +120,19 @@ A successful publish prints the live URL on the first line. Directory publishes 
 ### Authentication
 
 ```bash
-npx attim login                      # interactive email-code login; creates or rotates an account API token
-npx attim login --rotate             # explicit rotation for scripted flows
-npx attim login --token attim_uat_...  # store a token you already saved, without rotating
-npx attim whoami                     # verify the stored token
-npx attim logout                     # remove the local token (does not revoke it server-side)
+npx attim login --email you@example.com                # step 1: email a sign-in code (in a terminal, it then asks for the code)
+npx attim login --email you@example.com --code 123456  # step 2: sign in with the emailed code; sends no new code
+npx attim login --rotate                               # explicit rotation for scripted flows
+npx attim login --token attim_uat_...                  # store a token you already saved, without rotating
+npx attim whoami                                       # verify the stored token
+npx attim logout                                       # remove the local token (does not revoke it server-side)
 ```
 
-- `attim login` stores an account API token locally at `~/.config/attim/config.json` (override with `ATTIM_CONFIG_DIR`).
+- `attim login` creates or rotates an account API token and stores it locally at `~/.config/attim/config.json` (override with `ATTIM_CONFIG_DIR`).
 - If the account already has an active token, `attim login` rotates it because ATTIM cannot reveal an existing raw token again.
+- Agents have no terminal to type a code in, so sign in in two steps. Ask the user for their email and run `attim login --email <email>`: it emails the code and exits 1 without signing in, by design, printing the finishing command. Ask the user for the code from that email, then run `attim login --email <email> --code <code>`. The CLI prints that command as `attim login ...`; run it the same way you ran step 1 (`npx attim` or `./scripts/login.sh`). Without `--email`, login stops before sending anything.
+- ATTIM emails one sign-in code per address per minute, shared by the CLI and browser sign-in. A second `attim login` within that minute sends no new code and points to the code already sent, which still works. If the user is waiting for a code, do not run step 1 again: ask them for the code from the first email (and to check spam), then run step 2.
+- A CLI older than 0.1.5 (`npx attim --version`) cannot finish this without a terminal: it asks for a new code even with `--code` (within the minute it stops with `ATTIM_EMAIL_COOLDOWN`; after it, the new code retires the one the user has), and without `--code` it waits for input it cannot read. Ask the user to run `npx attim login` in their own terminal instead.
 - `attim logout` does not revoke the server-side token; revoke it from `/settings/advanced` if needed.
 
 ### Publish
@@ -221,6 +232,44 @@ npx attim variables delete my-site PRODUCT_NAME
 
 Use variables only for values that are safe to expose in source, JavaScript, stylesheets, network responses, and browser devtools. Never store passwords, API keys, private URLs, database strings, or other secrets in public variables.
 
+### Profile (link in bio)
+
+Each ATTIM account has one profile: a public page at `<handle>.attim.link` that works as a link in bio. Every profile has the same structure: name, bio, avatar, and optional social icons; up to 2 pinned links on top; the rest of the links; then a Projects section with the user's own ATTIM sites. ATTIM renders the page itself; the owner customizes only the theme (a preset plus colors, font, button shape/fill/shadow, and background). Link and project clicks are counted, and on paid plans the unpinned links are ordered by what visitors click. Free profiles show a small "Made with ATTIM" badge.
+
+The handle is free on every plan; on Free it can change once a week, and the old address redirects for 30 days. The profile is public and can appear in search results unless the user turns that off; it cannot be password-protected and does not count toward the plan's project limit. Projects stay hidden from search unless the user turns search on for each one.
+
+Call `get_public_profile` first. If there is no profile, ask the user for their display name, a short bio, an optional https avatar image URL, the links (say which, if any, to pin), and the handle they want, then call `create_profile`. Use `update_profile` for profile, theme, handle, or project changes (pass `projects` as their site slugs, in order) and `set_links` for link changes. Images can also be uploaded with `attim profile avatar` / `attim profile background`, or in the dashboard: the user selects their email at the top right to open the account menu, chooses **Your profile** (`/me`), then uploads the avatar on the **Profile** tab and the background photo on the **Design** tab. The older tool names `create_uplist`, `update_uplist`, and `get_uplist` still work but are no longer listed.
+
+```bash
+npx attim profile create ada --name "Ada Lovelace" --bio "Engines and ideas" --pin "Newsletter=https://news.example.com/" --link "Talks=https://talks.example.com/"
+npx attim profile show
+npx attim profile set --bio "Analytical engines" --social github=https://github.com/ada
+npx attim profile theme --preset paper --accent "#aa3300" --shape pill
+npx attim profile avatar ./avatar.png
+npx attim profile projects add engine-notes demo
+```
+
+Profiles and other managed link pages refuse new file uploads and version restores. CLI profile commands act on the account's profile; pass a slug to edit an older extra link page (`attim profile show <slug>`), and turn one back into an ordinary site with `attim profile detach <slug>`. `attim uplist` still works as another name for `attim profile`.
+
+### Custom link pages (developers)
+
+A custom link page is a claimed site whose HTML contains `{{ attim.links.pinned }}` and `{{ attim.links.smart }}`. ATTIM stores the links with the project, renders them at serve time as `<a class="attim-link">` buttons, counts clicks through a same-site redirect, and lets the owner change links without republishing. Pinned links (at most 2) stay on top in the owner's order; the rest are Smart links. Up to 50 links, public `http(s)` destinations only.
+
+```bash
+npx attim links list my-links
+npx attim links add my-links https://shop.example.com/ My shop --pinned
+npx attim links set my-links links.json
+npx attim links remove my-links lk_0123456789abcdef
+npx attim links stats my-links --days 30
+```
+
+Template contract for custom designs (full text: `get_link_page_template` or https://attim.link/docs/features/link-pages):
+
+- Place each placeholder once where its list belongs; `{{ attim.links.all }}` renders both lists and `{{ attim.links.json }}` gives `{ id, section, position, label, href }` items for script-rendered pages (keep `href` so clicks count).
+- Never hand-write the link `<a>` tags; they are not tracked. Style `.attim-link`, `.attim-links`, `[data-attim-section="pinned"]`, and hide empty lists with `[data-attim-empty]`.
+- Theme values are public variables (`LINKS_TITLE`, `LINKS_BIO`, `LINKS_BG`, ...). In CSS write a literal fallback first: `color: #fff; color: {{ vars.LINKS_TEXT }};`. Never put variables inside CSS custom properties.
+- Set every text variable the page uses before finalizing; unset variables render literally. Keep titles and bios plain text without `<`, `>`, or `"`.
+
 ### Password protection
 
 New password protection requires an account-owned site. A previously protected anonymous site can keep, update, or disable its existing protection with its claim token, but cannot newly enable protection.
@@ -262,6 +311,8 @@ npx attim list        # lists owned sites visible to the saved token
 | `--json` | Machine-readable JSON on stdout. |
 | `--no-finalize` | Leave the version pending for a separate finalize. |
 | `--dry-run` | Build and validate locally without API or upload calls. |
+| `--email <email>` | Email for `attim login`. |
+| `--code <code>` | Sign in with a code already emailed; `attim login` checks it and sends no new code. |
 | `--rotate` | Explicitly rotate the account API token during login. |
 | `--all` | Apply the command to all stored anonymous sites (claim). |
 | `--help` / `--version` | Show usage or the CLI version. |
@@ -295,7 +346,8 @@ Do not create a second slug; the user asked to keep the URL.
 ### Permanent owned site
 
 ```bash
-./scripts/login.sh
+./scripts/login.sh --email you@example.com                # emails a code; ask the user for it
+./scripts/login.sh --email you@example.com --code 123456  # signs in with that code
 npx attim publish ./dist --slug my-site
 ```
 
@@ -316,6 +368,13 @@ npx attim variables set my-site API_BASE_URL https://api.example.com
 ```
 
 Placeholders (`{{ vars.API_BASE_URL }}`) are replaced at serve time. Only use values safe for public exposure.
+
+### Build a link-in-bio page
+
+1. If the user has no custom design, call `create_link_page` with `title`, optional `bio`, `avatarUrl`, `theme` (`background`, `text`, `buttonBackground`, `buttonText`, `accent` as CSS colors; `font` as `system`, `serif`, `rounded`, `geometric`, or `mono`), and `links` (`{ label, url, section? }`, at most 2 pinned). It publishes, seeds variables and links, then finalizes in one call.
+2. For a custom design, call `get_link_page_template`, write HTML that follows its contract, publish it with `publish_site`, set the `LINKS_*` (or your own) variables with `set_variables`, then add links with `set_links`.
+3. To change links later, call `list_links` first and pass each kept link's `id` back to `set_links` so its click history survives. Links you omit are deleted.
+4. Hand off the `siteUrl` and the dashboard Links URL. Use `get_link_stats` to report clicks and why each link sits where it does.
 
 ### Clone a demo into a workspace
 
@@ -370,6 +429,7 @@ Available MCP tools:
 | `publish_site` | Publish a new site from inline files | No when anonymous MCP is enabled; sign in for an owned site |
 | `clone_site` | Clone an anonymous live site into a new anonymous site | No |
 | `fork_site` | Fork an anonymous site into an owned site | Yes |
+| `claim_site` | Keep a temporary site: move it into the connected account with its slug and `claimToken` | Yes; the user is asked to connect a free account first |
 | `update_site` | Upload a new version for a site | Yes, or claim token |
 | `finalize_site` | Promote a pending version to live | Yes, or claim token |
 | `delete_site` | Delete a site | Yes, or claim token |
@@ -382,6 +442,11 @@ Available MCP tools:
 | `restore_version` | Copy retained files into a new live version | Yes; owner or editor |
 | `set_variables` | Set public variables on an owned site | Yes |
 | `set_password_protection` | Enable or change owned-site protection; maintain grandfathered anonymous protection | Yes, or claim token for an already protected anonymous site |
+| `create_link_page` | Publish the official link page template with theme values and links set | Yes |
+| `list_links` | List a link page's links, ids, and visible positions | Yes |
+| `set_links` | Replace every link on a link page; pass ids to keep click history | Yes; owner or editor |
+| `get_link_stats` | Link page views, clicks, click-through rate, and position reasons | Yes |
+| `get_link_page_template` | Official link page HTML, theme variables, and placeholder contract | Yes |
 | `get_profile` | Identify the connected account | Yes |
 
 MCP file arguments are inline objects with `path` and either `content` or `contentBase64`. Root `index.html` is still required for static site publishes. A temporary publish returns a one-time `claimToken`; pass it to later update, finalize, or delete calls. Preserve it for user handoff without adding it to public files.
@@ -482,19 +547,28 @@ POST   /api/publish/:slug/finalize
 POST   /api/publish/:slug/clone
 POST   /api/publish/:slug/fork
 POST   /api/publish/:slug/claim
-POST   /api/publish/:slug/request-claim-link
+POST   /api/publish/:slug/request-claim-link        # emails a claim link; one per site and address per minute
 GET    /api/publishes
 GET    /api/publish/:slug/variables
 POST   /api/publish/:slug/variables
 PUT    /api/publish/:slug/variables/:name
 DELETE /api/publish/:slug/variables/:name
+GET    /api/publish/:slug/links
+PUT    /api/publish/:slug/links
+POST   /api/publish/:slug/links
+PUT    /api/publish/:slug/links/order
+PATCH  /api/publish/:slug/links/settings
+GET    /api/publish/:slug/links/stats
+PATCH  /api/publish/:slug/links/:linkId
+DELETE /api/publish/:slug/links/:linkId
+GET    /api/links/template
 PATCH  /api/publish/:slug/password-protection
 GET    /api/publish/:slug/versions
 PATCH  /api/publish/:slug/versions/:versionId
 POST   /api/publish/:slug/versions/:versionId/preview
 GET    /api/publish/:slug/versions/:versionId/download
 POST   /api/publish/:slug/versions/:versionId/restore
-POST   /api/auth/request-code
+POST   /api/auth/request-code                       # emails a sign-in code; one per address per minute
 POST   /api/auth/verify-code
 GET    /api/auth/me
 GET    /api/access/token
@@ -504,6 +578,7 @@ DELETE /api/access/token
 GET    /api/plan
 GET    /api/public/plans
 GET    /api/workspaces
+POST   /api/workspaces/:workspaceId/invitations     # emails an invitation; one per workspace and address per minute
 GET    /api/analytics
 GET    /api/public/stats
 POST   /api/support-requests
@@ -524,6 +599,7 @@ DELETE /mcp
 - Paths must be relative and traversal-safe.
 - Duplicate normalized paths are rejected.
 - Finalize verifies uploaded files before promotion.
+- Emails: at most one of each kind per address per minute. Sign-in codes and links share one wait per address across the CLI and browser; claim links wait per site and address; workspace invitations per workspace and address. During the wait, `POST /api/auth/request-code`, `POST /api/auth/magic-link/request`, `POST /api/publish/:slug/request-claim-link`, and `POST /api/workspaces/:workspaceId/invitations` send nothing and return `429` with `code: "ATTIM_EMAIL_COOLDOWN"`, `retryAfterSeconds`, and a `Retry-After` header. The code, link, or invitation already emailed keeps working.
 
 Check live docs before treating these limits as permanent product facts.
 
@@ -563,6 +639,10 @@ If command output is long or may be truncated, print or save the handoff fields 
 - Do not reuse a preview URL or share it publicly; request a fresh preview when needed.
 - Do not restore from a stale `currentVersionId`; list versions again after a conflict.
 - Never print, commit, or paste account tokens into public files.
+- Do not retry a sign-in code, sign-in link, claim-link, or invitation request that returned `429 ATTIM_EMAIL_COOLDOWN`. Ask the user to use the code or link already emailed, or wait `retryAfterSeconds`; a new sign-in code retires the previous one.
+- Do not hand-write tracked links on a link page; render them with `{{ attim.links.* }}` placeholders.
+- Do not call `set_links` without ids from `list_links` when the user wants to keep click history; omitted links are deleted.
+- Do not pin more than 2 links, and do not expect clone or fork to copy a link page's links.
 
 ## Quick copy block
 
