@@ -6,7 +6,8 @@ usage() {
 Usage: login.sh [attim login options]
 
 Examples:
-  ./scripts/login.sh
+  ./scripts/login.sh --email you@example.com
+  ./scripts/login.sh --email you@example.com --code 123456
   ./scripts/login.sh --rotate
   ./scripts/login.sh --token attim_uat_...
 
