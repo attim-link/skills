@@ -34,8 +34,9 @@ https://github.com/attim-link/skills/tree/main/attim
 
 - Publish a new static site from a folder or single HTML file
 - Update an existing site without changing its URL
+- Change part of a live site from any chat with the `read_site` and `edit_site` MCP tools, as a new version at the same link
 - Clone or fork an existing anonymous site
-- Claim anonymous sites into the account with the CLI or the `claim_site` MCP tool
+- Claim anonymous sites into the account with the CLI or the `claim_site` MCP tool, or keep one by email: `claim_site` with the user's email sends a link that keeps it and creates their free account
 - Preserve anonymous `claimToken` handoff fields
 - Sign in for claimed/permanent sites with two-step `attim login`: `--email` sends a code, then `--email` with `--code` finishes without a terminal
 - Respect the email limit: one sign-in code, claim link, or workspace invitation per address a minute
