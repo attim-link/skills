@@ -5,18 +5,18 @@ description: >
   Use it for generated demos, reports, dashboards, browser-only tools, microsites,
   docs previews, decks, and static app builds that need a shareable URL. Supports
   anonymous 12-hour publishes, claimed permanent sites, updates that keep the same
-  URL, password protection, public variables, cloning and forking, workspaces,
+  URL, targeted edits to a live site from any chat, password protection, public variables, cloning and forking, workspaces,
   project version history, the ATTIM profile (one public link-in-bio page per account with the user's links and
   ATTIM projects, with click counts), custom link pages, CLI publishing, MCP tools, and raw API fallback. Use when
   asked to "publish this", "host this static site", "share this HTML", "put this demo online", "update this ATTIM
-  site", "rename or restore a version", "protect this page", "add public variables", "make a link in bio page",
+  site", "change the page I published yesterday", "edit my ATTIM page", "rename or restore a version", "protect this page", "add public variables", "make a link in bio page",
   "make me a linktree", "set up my ATTIM profile", "show my projects on my profile", "bio link", "Instagram linkim",
   "add or reorder my links", "clone or fork this ATTIM site", or "use ATTIM".
 ---
 
 # ATTIM
 
-**Skill version: 2.6.0**
+**Skill version: 2.8.0**
 
 ATTIM lets agents publish static artifacts to live URLs at `{slug}.attim.link`.
 
@@ -72,6 +72,7 @@ Choose by the location of the files and the requested operation. Check which too
 | --- | --- | --- |
 | Publish or update a local file, build folder, or many assets | CLI (`attim publish` / `attim update`) | Raw API upload flow |
 | Publish or update a small set of inline files already in the conversation | MCP (`publish_site` / `update_site`) | CLI if files are already on disk; otherwise raw API |
+| Change part of a site published before, in this chat or another | MCP `read_site`, then `edit_site` | CLI `download`, edit the files, then `update` |
 | Clone or fork an existing site | MCP (`clone_site` / `fork_site`) | CLI `clone` / `fork` |
 | List owned sites or versions; rename, preview, download, restore, protect, or delete a remote site | Matching MCP tool | Matching CLI command |
 | Set a browser-visible public variable | MCP `set_variables` | CLI `variables set` |
@@ -80,7 +81,7 @@ Choose by the location of the files and the requested operation. Check which too
 | Design a custom link page with your own markup (developers) | MCP `get_link_page_template`, then `publish_site`; or `create_link_page` | Publish the template from the docs, then CLI `links set` |
 | Add, edit, reorder, or count clicks on profile or link page links | MCP `list_links` / `set_links` / `get_link_stats` | CLI `links list` / `links set` / `links stats` |
 | Identify the connected account | MCP `get_profile` | CLI `whoami` |
-| Keep (claim) a temporary site | MCP `claim_site` with its slug and `claimToken` | CLI `claim` |
+| Keep (claim) a temporary site | MCP `claim_site` with its slug and `claimToken`, plus the user's email when no account is connected | CLI `claim` |
 | Inspect local CLI setup, or list/delete public variables | CLI or ATTIM web UI | Raw API where that operation is supported |
 
 Apply these rules before every ATTIM action:
@@ -429,12 +430,14 @@ Available MCP tools:
 | `publish_site` | Publish a new site from inline files | No when anonymous MCP is enabled; sign in for an owned site |
 | `clone_site` | Clone an anonymous live site into a new anonymous site | No |
 | `fork_site` | Fork an anonymous site into an owned site | Yes |
-| `claim_site` | Keep a temporary site: move it into the connected account with its slug and `claimToken` | Yes; the user is asked to connect a free account first |
-| `update_site` | Upload a new version for a site | Yes, or claim token |
+| `claim_site` | Keep a temporary site with its slug and `claimToken`: move it into the connected account, or with the user's `email`, email them a link that keeps it and creates their free account | No with an `email`; without one, the user is asked to connect an account |
+| `update_site` | Replace every file of a site with a new version | Yes, or claim token |
+| `read_site` | Open a site published before: live `versionId`, file list, and text of HTML, CSS, and JS files, in pages; `search` finds text | Yes, or claim token; Team viewers can read |
+| `edit_site` | Change a live site at the same link with exact replacements, whole-file writes, and deletes, as a new named version | Yes, or claim token; owner or editor |
 | `finalize_site` | Promote a pending version to live | Yes, or claim token |
 | `delete_site` | Delete a site | Yes, or claim token |
 | `rename_site` | Change an owned site's slug | Yes; paid plan |
-| `list_sites` | List owned sites | Yes |
+| `list_sites` | List owned sites, one line each with title and link | Yes |
 | `list_versions` | List retained versions and the live version ID for an owned project | Yes |
 | `rename_version` | Set or clear a retained version's name | Yes; owner or editor |
 | `preview_version` | Create a private preview link for a retained version | Yes |
@@ -454,6 +457,23 @@ MCP file arguments are inline objects with `path` and either `content` or `conte
 For version tools, use the project `slug` and the permanent `versionId` returned by `list_versions({"slug":"my-site"})`. To name version 12, call `rename_version({"slug":"my-site","versionId":"12","name":"Before redesign"})`; pass `name: null` to clear it. `preview_version` returns a one-use URL. `download_version` returns an `attim://versions/{slug}/{versionId}/download` resource link; read that resource with account authentication to receive the ZIP as base64 `application/zip` content. Do not treat the URI as a public download URL.
 
 Before `restore_version`, use `list_versions` to get `currentVersionId`, then call `restore_version({"slug":"my-site","versionId":"12","expectedCurrentVersionId":"<currentVersionId>"})`. The expected ID protects against overwriting a newer publish. On conflict, list again and ask the user to reconsider the now-current version before retrying.
+
+### Change a site later
+
+To change a site published before, in this chat or another, do not rebuild it. Rebuilding changes its look and loses earlier changes.
+
+1. Find it with `list_sites` (one line per site, with title and link), or use the link the user gives you.
+2. Open it with `read_site({"slug":"my-site"})`; a link works as the slug. It returns the live `versionId`, the file list, and the text of the HTML, CSS, and JS files. For a big site, follow the `path` and `offset` lines it prints, or pass `search` to find the part to change.
+3. Change only what was asked, with every requested change in one `edit_site` call:
+
+   ```json
+   {"slug":"my-site","baseVersionId":"42","versionName":"Added Q3 numbers","replacements":[{"path":"index.html","oldText":"<td>Q3</td><td>TBD</td>","newText":"<td>Q3</td><td>$1.2M</td>"}]}
+   ```
+
+   Copy `oldText` exactly from `read_site`, with enough surrounding text to appear once, or set `replaceAll`. Use `writes` for new or fully rewritten files and `deletes` to remove files. Only the last 10 versions are kept, so many small edits push out the version from before the chat.
+4. Report the same link and the new version name. For an owned site, the version from before the change can be restored with `restore_version`.
+
+On `ATTIM_EDIT_NO_MATCH` or `ATTIM_EDIT_AMBIGUOUS`, read or `search` again and fix `oldText`. On `ATTIM_VERSION_CONFLICT`, the site changed in the meantime: read it again and redo the edit on the current text. Keep `{{ vars.* }}` and `{{ attim.links.* }}` placeholders as they are. Use `update_site` only to replace the whole site. A temporary site can only be changed with its `claimToken`, so if the user may want to change it later in another chat, ask for their email and keep it with `claim_site` first. Profiles and managed link pages are not edited as files; use `update_profile` or `set_links`. Confirm with the user before changing a live site.
 
 ## MCP setup examples
 
@@ -599,7 +619,7 @@ DELETE /mcp
 - Paths must be relative and traversal-safe.
 - Duplicate normalized paths are rejected.
 - Finalize verifies uploaded files before promotion.
-- Emails: at most one of each kind per address per minute. Sign-in codes and links share one wait per address across the CLI and browser; claim links wait per site and address; workspace invitations per workspace and address. During the wait, `POST /api/auth/request-code`, `POST /api/auth/magic-link/request`, `POST /api/publish/:slug/request-claim-link`, and `POST /api/workspaces/:workspaceId/invitations` send nothing and return `429` with `code: "ATTIM_EMAIL_COOLDOWN"`, `retryAfterSeconds`, and a `Retry-After` header. The code, link, or invitation already emailed keeps working.
+- Emails: at most one of each kind per address per minute. Sign-in codes and links share one wait per address across the CLI and browser; claim links wait per site and address; workspace invitations per workspace and address. During the wait, `POST /api/auth/request-code`, `POST /api/auth/magic-link/request`, `POST /api/publish/:slug/request-claim-link` (and MCP `claim_site` with an `email`), and `POST /api/workspaces/:workspaceId/invitations` send nothing and return `429` with `code: "ATTIM_EMAIL_COOLDOWN"`, `retryAfterSeconds`, and a `Retry-After` header. The code, link, or invitation already emailed keeps working.
 
 Check live docs before treating these limits as permanent product facts.
 
@@ -614,6 +634,8 @@ For anonymous publishes, return:
 - whether finalization succeeded
 - `claimToken` if the tool returned it
 - expiry information if present
+
+After an anonymous MCP publish, tell the user how long the link stays live and ask for their email to keep it. When they give it, call `claim_site` with the slug, `claimToken`, and `email`. ATTIM emails them a **Keep this link** button that keeps the site and creates their free account; it works for a few minutes, and a new email can be sent until the site expires. Keeping it this way doesn't connect the chat to their account: to change the site later, they sign in to ATTIM when asked.
 
 For claimed-site publishes or mutations, return:
 
@@ -634,6 +656,7 @@ If command output is long or may be truncated, print or save the handoff fields 
 - Do not use `--slug` without account authentication.
 - Do not use `--ttl` for owned sites; owned sites are permanent.
 - Do not create a new slug when the user asked to update an existing site.
+- Do not rebuild a site from scratch, or resend every file with `update_site`, when the user asked to change part of it; use `read_site` and `edit_site`.
 - Do not say a site is permanent unless it is claimed/authenticated or the command output confirms permanence.
 - Do not invent upload URLs, version IDs, claim tokens, or finalization results.
 - Do not reuse a preview URL or share it publicly; request a fresh preview when needed.
