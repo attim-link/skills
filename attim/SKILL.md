@@ -1,22 +1,23 @@
 ---
 name: attim
 description: >
-  ATTIM lets agents publish static artifacts to live URLs at {slug}.attim.link.
-  Use it for generated demos, reports, dashboards, browser-only tools, microsites,
-  docs previews, decks, and static app builds that need a shareable URL. Supports
-  anonymous 12-hour publishes, claimed permanent sites, updates that keep the same
-  URL, targeted edits to a live site from any chat, password protection, public variables, cloning and forking, workspaces,
-  project version history, the ATTIM profile (one public link-in-bio page per account with the user's links and
-  ATTIM projects, with click counts), custom link pages, CLI publishing, MCP tools, and raw API fallback. Use when
-  asked to "publish this", "host this static site", "share this HTML", "put this demo online", "update this ATTIM
-  site", "change the page I published yesterday", "edit my ATTIM page", "rename or restore a version", "protect this page", "add public variables", "make a link in bio page",
-  "make me a linktree", "set up my ATTIM profile", "show my projects on my profile", "bio link", "Instagram linkim",
-  "add or reorder my links", "clone or fork this ATTIM site", or "use ATTIM".
+  Publish static work to live links at {slug}.attim.link and manage it: demos, reports,
+  dashboards, browser-only tools, microsites, docs previews, decks, and static app builds.
+  Covers temporary 12-hour publishes, keeping a link by email or claiming it, updates at the
+  same link, targeted edits to a live site from any chat, version history, Insights, password
+  protection, public variables, cloning and forking, workspaces, the ATTIM profile (one
+  link-in-bio page with the user's links and projects), custom link pages, and WebMCP tools
+  on published pages, through the CLI, MCP tools, or the HTTP API. Use when asked to
+  "publish this", "host this static site", "share this HTML", "put this demo online",
+  "update this ATTIM site", "change the page I published yesterday", "how is my page doing",
+  "rename or restore a version", "protect this page", "add public variables", "make me a
+  linktree", "set up my ATTIM profile", "bio link", "Instagram linkim", "clone or fork this
+  ATTIM site", or "use ATTIM".
 ---
 
 # ATTIM
 
-**Skill version: 2.8.0**
+**Skill version: 2.10.0**
 
 ATTIM lets agents publish static artifacts to live URLs at `{slug}.attim.link`.
 
@@ -80,6 +81,7 @@ Choose by the location of the files and the requested operation. Check which too
 | Change the profile's name, bio, social icons, theme, language, handle, or projects | MCP `get_public_profile` / `update_profile` | CLI `profile show` / `profile set` / `profile theme` / `profile projects` |
 | Design a custom link page with your own markup (developers) | MCP `get_link_page_template`, then `publish_site`; or `create_link_page` | Publish the template from the docs, then CLI `links set` |
 | Add, edit, reorder, or count clicks on profile or link page links | MCP `list_links` / `set_links` / `get_link_stats` | CLI `links list` / `links set` / `links stats` |
+| See how sites are doing: views and visitors from people, AI agents, and other bots | MCP `get_insights` | CLI `insights` |
 | Identify the connected account | MCP `get_profile` | CLI `whoami` |
 | Keep (claim) a temporary site | MCP `claim_site` with its slug and `claimToken`, plus the user's email when no account is connected | CLI `claim` |
 | Inspect local CLI setup, or list/delete public variables | CLI or ATTIM web UI | Raw API where that operation is supported |
@@ -123,7 +125,7 @@ A successful publish prints the live URL on the first line. Directory publishes 
 ```bash
 npx attim login --email you@example.com                # step 1: email a sign-in code (in a terminal, it then asks for the code)
 npx attim login --email you@example.com --code 123456  # step 2: sign in with the emailed code; sends no new code
-npx attim login --rotate                               # explicit rotation for scripted flows
+npx attim login --rotate                               # replace the token; signing in already does this
 npx attim login --token attim_uat_...                  # store a token you already saved, without rotating
 npx attim whoami                                       # verify the stored token
 npx attim logout                                       # remove the local token (does not revoke it server-side)
@@ -147,6 +149,7 @@ npx attim publish ./dist --ttl 43200                        # expiry for a crede
 npx attim publish ./dist --workspace 1                      # publish into a workspace
 npx attim publish ./dist --no-finalize                      # upload but leave the version pending
 npx attim publish ./dist --dry-run                          # validate locally, no network calls
+npx attim publish ./dist --include-dotfiles                 # also publish hidden files and folders
 npx attim publish ./dist --json                             # machine-readable JSON on stdout
 ```
 
@@ -154,6 +157,8 @@ npx attim publish ./dist --json                             # machine-readable J
 - Owned sites are permanent; anonymous sites expire after up to 12 hours.
 - A saved CLI login makes `publish` an owned publish; `--ttl` is rejected for that publish.
 - `--no-finalize` requires a later `finalize` command to make the version live.
+- Folder publishes leave out hidden files and folders, such as `.env`, `.git`, and `.DS_Store`, and list what they left out. `--include-dotfiles` publishes them too; `.well-known/` is always published.
+- Before uploading, `publish` says whether it makes a temporary site or one the account owns, and from which token. `--dry-run --json` returns `anonymous`, `ownershipStatus`, and `tokenSource` without uploading anything.
 
 ### Update an existing site
 
@@ -219,7 +224,7 @@ npx attim claim --all
 npx attim claim my-site --workspace 1
 ```
 
-Claiming converts an anonymous site into an owned site. The CLI reuses the locally saved claim token from the original publish. After claiming, the site becomes permanent and account-managed.
+Claiming converts an anonymous site into an owned site. The CLI reuses the locally saved claim token from the original publish. After claiming, the site becomes permanent and account-managed. `claim --all` reports every saved site, keeps going when one fails, keeps the failed ones for another try, and forgets the ones that expired or were claimed already.
 
 ### Public variables
 
@@ -271,6 +276,18 @@ Template contract for custom designs (full text: `get_link_page_template` or htt
 - Theme values are public variables (`LINKS_TITLE`, `LINKS_BIO`, `LINKS_BG`, ...). In CSS write a literal fallback first: `color: #fff; color: {{ vars.LINKS_TEXT }};`. Never put variables inside CSS custom properties.
 - Set every text variable the page uses before finalizing; unset variables render literally. Keep titles and bios plain text without `<`, `>`, or `"`.
 
+### Insights
+
+On the Hobby and Team plans, `insights` shows how the account's sites are doing: page views and visitors from people first, then AI agents (by name) and other bots, counted apart, with the top sites, referrers, and countries (which count people).
+
+```bash
+npx attim insights
+npx attim insights my-site --days 7
+npx attim insights --workspace 42 --json
+```
+
+`--days` is 7, 30, or 90. `--json` prints the same fields as MCP `get_insights`. On the Free plan it exits with 3 and a hint to pass on; a slug that isn't one of the account's sites exits with 4.
+
 ### Password protection
 
 New password protection requires an account-owned site. A previously protected anonymous site can keep, update, or disable its existing protection with its claim token, but cannot newly enable protection.
@@ -282,11 +299,15 @@ npx attim publish ./dist --password "secret-password" --password-access-ttl 8640
 # Enable on a claimed site
 npx attim password enable my-site "secret-password" --access-ttl 86400
 
+# The same, with the password kept out of shell history and the process list
+printf '%s' "$SITE_PASSWORD" | npx attim password enable my-site --password-stdin --access-ttl 86400
+
 # Disable
 npx attim password disable my-site
 ```
 
 - `--access-ttl` (or `--password-access-ttl` at publish time) controls how long a successful password unlock lasts, in seconds. If omitted, ATTIM chooses the duration.
+- The password can be an argument, `--password-stdin` (for `password enable` and `publish`), or `ATTIM_SITE_PASSWORD` (for `password enable`). Prefer stdin in scripts.
 - Do not invent or reveal passwords in summaries. If a password is user-provided, acknowledge that protection is enabled without repeating the secret unless the user explicitly needs it restated.
 
 ### Diagnostics
@@ -306,23 +327,44 @@ npx attim list        # lists owned sites visible to the saved token
 | `--claim-token <token>` | Anonymous site management token. Defaults to `ATTIM_CLAIM_TOKEN`. |
 | `--ttl <seconds>` | TTL for anonymous publishes or clones, from 60 to 43200 seconds. |
 | `--slug <slug>` | Explicit destination slug for authenticated publishes or forks. |
-| `--workspace <id>` | Target workspace for publish, fork, list, and claim. |
+| `--workspace <id>` | Target workspace for publish, fork, list, claim, and insights. |
 | `--access-ttl <seconds>` | Password unlock duration for `password enable`. |
 | `--password-access-ttl <seconds>` | Password unlock duration when enabling protection during publish. |
-| `--json` | Machine-readable JSON on stdout. |
+| `--json` | Machine-readable JSON on stdout. Errors are JSON on stderr. |
+| `--include-dotfiles` | Also publish hidden files and folders. |
+| `--password-stdin` | Read the site password from stdin. |
+| `--output <file.zip>` | Output path for `attim download`. |
 | `--no-finalize` | Leave the version pending for a separate finalize. |
 | `--dry-run` | Build and validate locally without API or upload calls. |
 | `--email <email>` | Email for `attim login`. |
 | `--code <code>` | Sign in with a code already emailed; `attim login` checks it and sends no new code. |
-| `--rotate` | Explicitly rotate the account API token during login. |
+| `--rotate` | Replace the account API token. Signing in with `attim login` already does this. |
 | `--all` | Apply the command to all stored anonymous sites (claim). |
-| `--help` / `--version` | Show usage or the CLI version. |
+| `--help` / `--version` | Show usage or the CLI version. After a command, `--help` shows that command's options, examples, and exit codes. |
 
-Environment variables: `ATTIM_API_TOKEN`, `ATTIM_CLAIM_TOKEN`, `ATTIM_BASE_URL`, `ATTIM_CONFIG_DIR`.
+Arguments can also be passed by name, so their order never matters: `--site <slug>`, `--path <file-or-dir>`, `--version-id <id>`, `--name`, `--value`, `--label`, `--url`, and `--link-id`. A command rejects options it doesn't use instead of ignoring them.
+
+Environment variables: `ATTIM_API_TOKEN`, `ATTIM_CLAIM_TOKEN`, `ATTIM_SITE_PASSWORD`, `ATTIM_BASE_URL`, `ATTIM_CONFIG_DIR`.
 
 Credential precedence for account operations: `--token` → `ATTIM_API_TOKEN` → token saved by `attim login`.
 
 Credential precedence for anonymous management: `--claim-token` → `ATTIM_CLAIM_TOKEN` → the CLI's locally saved claim token from an earlier publish.
+
+### Exit codes and errors
+
+The CLI never waits for input it can't get. Read its exit code before retrying:
+
+| Exit code | Meaning |
+| --- | --- |
+| 0 | Success |
+| 1 | Error; `attim doctor` also exits 1 when a check fails |
+| 2 | Usage: the command can't run as typed; see `attim <command> --help` |
+| 3 | Sign in, pass a claim token, or use an account or plan with access; a signed-out `whoami` exits 3 |
+| 4 | Not found: no such site, version, or profile |
+| 5 | Conflict: the site changed meanwhile, the name is taken, or `download` would overwrite a file |
+| 6 | Rate-limited: wait `retryAfterSeconds`, then try again |
+
+With `--json`, an error is JSON on stderr, `{"error":{"message","code","hint","status","retryAfterSeconds","exitCode"}}`, and stdout stays empty. Without it, an `Error:` line is followed by `Hint:` and `Retry after:` lines when there is a hint or a wait.
 
 ## Scenario playbook
 
@@ -372,10 +414,14 @@ Placeholders (`{{ vars.API_BASE_URL }}`) are replaced at serve time. Only use va
 
 ### Build a link-in-bio page
 
-1. If the user has no custom design, call `create_link_page` with `title`, optional `bio`, `avatarUrl`, `theme` (`background`, `text`, `buttonBackground`, `buttonText`, `accent` as CSS colors; `font` as `system`, `serif`, `rounded`, `geometric`, or `mono`), and `links` (`{ label, url, section? }`, at most 2 pinned). It publishes, seeds variables and links, then finalizes in one call.
-2. For a custom design, call `get_link_page_template`, write HTML that follows its contract, publish it with `publish_site`, set the `LINKS_*` (or your own) variables with `set_variables`, then add links with `set_links`.
+1. Call `get_public_profile`. Without a profile, ask the user for their display name, a short bio, an optional https avatar URL, the links (and which, at most 2, to pin), and the handle they want, then call `create_profile`. With one, use `update_profile` for the profile, theme, handle, or projects, and `set_links` for links. Hand off the profile link.
+2. Only when a developer wants their own markup: call `get_link_page_template`, write HTML that follows its contract, publish it with `publish_site`, set the `LINKS_*` (or your own) variables with `set_variables`, then add links with `set_links`. `create_link_page` publishes the official template with theme values and links in one call.
 3. To change links later, call `list_links` first and pass each kept link's `id` back to `set_links` so its click history survives. Links you omit are deleted.
-4. Hand off the `siteUrl` and the dashboard Links URL. Use `get_link_stats` to report clicks and why each link sits where it does.
+4. Use `get_link_stats` to report clicks and why each link sits where it does.
+
+### Make an interactive page usable by browser agents
+
+When you publish a calculator, a dashboard with filters, a form, or another interactive page, you can register WebMCP tools in its script so AI agents in the browser can use it instead of clicking around: https://attim.link/docs/features/agent-tools. Keep it static: tools run in the visitor's browser, and everything in the page, public variables included, is public, so never put API keys or secrets in a tool.
 
 ### Clone a demo into a workspace
 
@@ -421,13 +467,13 @@ For owned sites and account tools, connect an ATTIM account through the MCP host
 
 Modern MCP clients use `server/discover` and send protocol metadata and authentication on each request; no MCP session is created. Older clients using `initialize` may receive a session token in the response body or `Mcp-Session-Token` header. Preserve it for later tool calls and close it with `DELETE /mcp` when needed. OAuth clients send their access token on each call.
 
-Anonymous MCP publishing works only after the server enables that path. Until then, use the credential-free CLI or API path. Do not silently substitute anonymous publishing for a signed-in user.
+Without a connected account, `publish_site` and `clone_site` create temporary sites that last up to 12 hours. Tell the user how long the link stays live and offer to keep it by email with `claim_site`. Do not make a temporary site for a user who is signed in.
 
 Available MCP tools:
 
 | Tool | Purpose | Requires account |
 | --- | --- | --- |
-| `publish_site` | Publish a new site from inline files | No when anonymous MCP is enabled; sign in for an owned site |
+| `publish_site` | Publish a new site from inline files | No (temporary site); sign in for an owned site |
 | `clone_site` | Clone an anonymous live site into a new anonymous site | No |
 | `fork_site` | Fork an anonymous site into an owned site | Yes |
 | `claim_site` | Keep a temporary site with its slug and `claimToken`: move it into the connected account, or with the user's `email`, email them a link that keeps it and creates their free account | No with an `email`; without one, the user is asked to connect an account |
@@ -445,16 +491,24 @@ Available MCP tools:
 | `restore_version` | Copy retained files into a new live version | Yes; owner or editor |
 | `set_variables` | Set public variables on an owned site | Yes |
 | `set_password_protection` | Enable or change owned-site protection; maintain grandfathered anonymous protection | Yes, or claim token for an already protected anonymous site |
+| `create_profile` | Set up the account's profile, its one link-in-bio page: name, bio, socials, theme, links, projects, and handle | Yes |
+| `update_profile` | Change the profile, social icons, theme, language, handle, links, or projects | Yes |
+| `get_public_profile` | Read the profile with its links and projects, or `profile: null` before set-up | Yes |
 | `create_link_page` | Publish the official link page template with theme values and links set | Yes |
 | `list_links` | List a link page's links, ids, and visible positions | Yes |
 | `set_links` | Replace every link on a link page; pass ids to keep click history | Yes; owner or editor |
 | `get_link_stats` | Link page views, clicks, click-through rate, and position reasons | Yes |
+| `get_insights` | Page views and visitors from people, AI agents (by name) and other bots counted apart, and top sites, referrers, and countries, for every site or one | Yes; Hobby or Team plan |
 | `get_link_page_template` | Official link page HTML, theme variables, and placeholder contract | Yes |
 | `get_profile` | Identify the connected account | Yes |
+
+A tool that runs and fails answers with `isError: true`: its text says what went wrong and what to do next, and `_meta["attim/error"]` carries the `code`, `status`, and details such as `retryAfterSeconds`. Fix the call from that hint instead of switching paths. Site results' `structuredContent` has `slug`, `siteUrl`, `status` (`live` or `pending`), and `versionId`, plus `expiresAt` and the new `claimToken` for a temporary site; upload links and internal IDs are never included. AI apps with MCP Apps, such as Claude and ChatGPT, also show the site in a card with a preview, **Open site**, and, for a temporary site, **Keep this link**.
 
 MCP file arguments are inline objects with `path` and either `content` or `contentBase64`. Root `index.html` is still required for static site publishes. A temporary publish returns a one-time `claimToken`; pass it to later update, finalize, or delete calls. Preserve it for user handoff without adding it to public files.
 
 For version tools, use the project `slug` and the permanent `versionId` returned by `list_versions({"slug":"my-site"})`. To name version 12, call `rename_version({"slug":"my-site","versionId":"12","name":"Before redesign"})`; pass `name: null` to clear it. `preview_version` returns a one-use URL. `download_version` returns an `attim://versions/{slug}/{versionId}/download` resource link; read that resource with account authentication to receive the ZIP as base64 `application/zip` content. Do not treat the URI as a public download URL.
+
+When the user asks how a page or their sites are doing, call `get_insights` with the site's `slug` or link, or with no slug for every site; `days` is 7, 30, or 90 (30 by default) and `workspaceId` reads a team Workspace. Report people first (`pageViews` and `visitors` count people only, as do `topSites`, `topReferrers`, and `topCountries`), then `aiAgents` with `topAgents` by name, then `bots`. On `ATTIM_ANALYTICS_PLAN_REQUIRED`, pass the hint on: Insights come with the Hobby and Team plans.
 
 Before `restore_version`, use `list_versions` to get `currentVersionId`, then call `restore_version({"slug":"my-site","versionId":"12","expectedCurrentVersionId":"<currentVersionId>"})`. The expected ID protects against overwriting a newer publish. On conflict, list again and ask the user to reconsider the now-current version before retrying.
 
@@ -506,7 +560,9 @@ http_headers = { Authorization = "Bearer attim_uat_..." }
 
 ## Raw API fallback
 
-Use this only when CLI and MCP are not viable.
+Use this only when CLI and MCP are not viable. Full reference: https://attim.link/docs/api.
+
+The HTTP API needs an account API token on each request (`Authorization: Bearer attim_uat_...`). Without an account, use the CLI or MCP: temporary publishing over plain HTTP asks for a browser check that scripts can't pass (`ATTIM_TURNSTILE_REQUIRED`).
 
 Create or update flow:
 
@@ -516,7 +572,7 @@ Create or update flow:
 4. Save `slug`, `siteUrl`, `upload.versionId`, `upload.uploads[]`, and `claimToken` when present.
 5. Upload every file with the returned upload target's exact method, URL, and headers.
 6. Finalize with `POST https://attim.link/api/publish/:slug/finalize` and the returned `versionId`.
-7. Include the anonymous `claimToken` when finalizing or mutating an anonymous site.
+7. For a temporary site made by the CLI or MCP, send its `claimToken` in the `X-ATTIM-Claim-Token` header or the JSON body.
 
 Minimal publish request:
 
@@ -528,12 +584,11 @@ Minimal publish request:
       "size": 1234,
       "contentType": "text/html; charset=utf-8"
     }
-  ],
-  "ttlSeconds": 43200
+  ]
 }
 ```
 
-Finalize anonymous site:
+Finalize a temporary site made by the CLI or MCP:
 
 ```json
 {
@@ -651,7 +706,7 @@ If command output is long or may be truncated, print or save the handoff fields 
 - Do not return only a URL for anonymous publishes; include the claim token when it is returned.
 - Do not lose a claim token before handoff. It cannot be recovered from the slug.
 - Do not publish a parent folder that contains the site folder. Publish the folder that directly contains `index.html`.
-- Do not put secrets in public variables, uploaded static files, or client-side configuration.
+- Do not put secrets in public variables, uploaded static files, client-side configuration, or WebMCP tools.
 - Do not assume ATTIM runs backend code.
 - Do not use `--slug` without account authentication.
 - Do not use `--ttl` for owned sites; owned sites are permanent.
