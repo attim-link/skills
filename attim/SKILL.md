@@ -17,7 +17,7 @@ description: >
 
 # ATTIM
 
-**Skill version: 2.10.0**
+**Skill version: 2.10.1**
 
 ATTIM lets agents publish static artifacts to live URLs at `{slug}.attim.link`.
 
@@ -158,6 +158,7 @@ npx attim publish ./dist --json                             # machine-readable J
 - A saved CLI login makes `publish` an owned publish; `--ttl` is rejected for that publish.
 - `--no-finalize` requires a later `finalize` command to make the version live.
 - Folder publishes leave out hidden files and folders, such as `.env`, `.git`, and `.DS_Store`, and list what they left out. `--include-dotfiles` publishes them too; `.well-known/` is always published.
+- ATTIM never publishes or serves files that can hold secrets or source history, even with `--include-dotfiles`: `.env` and `.env.*`, `.npmrc`, `.pypirc`, `.netrc`, `.git-credentials`, `.htpasswd`, and anything in `.git/`, `.svn/`, `.hg/`, `.ssh/`, or `.aws/`. On `ATTIM_SENSITIVE_PATH` (from the CLI, MCP, or API), leave them out and publish again; in `edit_site`, delete ones the site already has in the same edit.
 - Before uploading, `publish` says whether it makes a temporary site or one the account owns, and from which token. `--dry-run --json` returns `anonymous`, `ownershipStatus`, and `tokenSource` without uploading anything.
 
 ### Update an existing site
@@ -331,7 +332,7 @@ npx attim list        # lists owned sites visible to the saved token
 | `--access-ttl <seconds>` | Password unlock duration for `password enable`. |
 | `--password-access-ttl <seconds>` | Password unlock duration when enabling protection during publish. |
 | `--json` | Machine-readable JSON on stdout. Errors are JSON on stderr. |
-| `--include-dotfiles` | Also publish hidden files and folders. |
+| `--include-dotfiles` | Also publish hidden files and folders, except secret files such as `.env` and `.git/`. |
 | `--password-stdin` | Read the site password from stdin. |
 | `--output <file.zip>` | Output path for `attim download`. |
 | `--no-finalize` | Leave the version pending for a separate finalize. |

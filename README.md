@@ -33,6 +33,7 @@ https://github.com/attim-link/skills/tree/main/attim
 ## What the skill covers
 
 - Publish a new static site from a folder or single HTML file; folder publishes leave out hidden files such as `.env` and `.git` unless `--include-dotfiles` is passed
+- Never publish secret files: ATTIM refuses `.env`, `.git/`, `.npmrc`, and other files that can hold secrets or source history (`ATTIM_SENSITIVE_PATH`), even with `--include-dotfiles`, and sites never serve them
 - Publish temporary 12-hour sites through MCP without an account; Claude and ChatGPT show the site in a card with a preview
 - Update an existing site without changing its URL
 - Change part of a live site from any chat with the `read_site` and `edit_site` MCP tools, as a new version at the same link
