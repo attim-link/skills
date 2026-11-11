@@ -17,7 +17,7 @@ description: >
 
 # ATTIM
 
-**Skill version: 2.10.1**
+**Skill version: 2.12.0**
 
 ATTIM lets agents publish static artifacts to live URLs at `{slug}.attim.link`.
 
@@ -74,12 +74,12 @@ Choose by the location of the files and the requested operation. Check which too
 | Publish or update a local file, build folder, or many assets | CLI (`attim publish` / `attim update`) | Raw API upload flow |
 | Publish or update a small set of inline files already in the conversation | MCP (`publish_site` / `update_site`) | CLI if files are already on disk; otherwise raw API |
 | Change part of a site published before, in this chat or another | MCP `read_site`, then `edit_site` | CLI `download`, edit the files, then `update` |
-| Clone or fork an existing site | MCP (`clone_site` / `fork_site`) | CLI `clone` / `fork` |
+| Copy a temporary site (clone or fork) | MCP `copy_site` | CLI `clone` / `fork` |
 | List owned sites or versions; rename, preview, download, restore, protect, or delete a remote site | Matching MCP tool | Matching CLI command |
 | Set a browser-visible public variable | MCP `set_variables` | CLI `variables set` |
-| Set up the user's profile (link in bio, Linktree-style page) | MCP `create_profile` | CLI `profile create` |
-| Change the profile's name, bio, social icons, theme, language, handle, or projects | MCP `get_public_profile` / `update_profile` | CLI `profile show` / `profile set` / `profile theme` / `profile projects` |
-| Design a custom link page with your own markup (developers) | MCP `get_link_page_template`, then `publish_site`; or `create_link_page` | Publish the template from the docs, then CLI `links set` |
+| Set up the user's profile (link in bio, Linktree-style page) | MCP `get_public_profile`, then `save_profile` | CLI `profile create` |
+| Change the profile's name, bio, social icons, theme, language, handle, or projects | MCP `get_public_profile` / `save_profile` | CLI `profile show` / `profile set` / `profile theme` / `profile projects` |
+| Design a custom link page with your own markup (developers) | Write HTML to the contract below, `publish_site`, then `set_links` | Publish the template from the docs, then CLI `links set` |
 | Add, edit, reorder, or count clicks on profile or link page links | MCP `list_links` / `set_links` / `get_link_stats` | CLI `links list` / `links set` / `links stats` |
 | See how sites are doing: views and visitors from people, AI agents, and other bots | MCP `get_insights` | CLI `insights` |
 | Identify the connected account | MCP `get_profile` | CLI `whoami` |
@@ -197,6 +197,18 @@ npx attim list --workspace 1
 - Anonymous sites require `--claim-token` or `ATTIM_CLAIM_TOKEN` for finalize and delete.
 - Claimed sites require an account API token (stored, `--token`, or `ATTIM_API_TOKEN`).
 
+### Site details
+
+```bash
+npx attim details my-site --title "Launch notes" --description "What shipped in May"
+npx attim details my-site --search-indexing on
+npx attim details my-site --description ""
+```
+
+- Changes the title and description ATTIM shows for an owned site (dashboard, profile project cards) and whether search engines may list it. It does not change the page's own HTML; to change its `<title>`, edit the files.
+- Anything left out stays; an empty value clears it. Titles are up to 120 characters, descriptions up to 500.
+- Sites are hidden from search until indexing is turned on; the profile is listed until it is turned off (use the handle as the slug). `attim info` shows the current details. MCP: `update_site_details`.
+
 ### Project versions
 
 Finalized uploads to an owned project create permanent version IDs. ATTIM retains the latest 10 finalized versions in one history per project, including Team projects. Optional names label versions without changing their IDs or files.
@@ -245,7 +257,7 @@ Each ATTIM account has one profile: a public page at `<handle>.attim.link` that 
 
 The handle is free on every plan; on Free it can change once a week, and the old address redirects for 30 days. The profile is public and can appear in search results unless the user turns that off; it cannot be password-protected and does not count toward the plan's project limit. Projects stay hidden from search unless the user turns search on for each one.
 
-Call `get_public_profile` first. If there is no profile, ask the user for their display name, a short bio, an optional https avatar image URL, the links (say which, if any, to pin), and the handle they want, then call `create_profile`. Use `update_profile` for profile, theme, handle, or project changes (pass `projects` as their site slugs, in order) and `set_links` for link changes. Images can also be uploaded with `attim profile avatar` / `attim profile background`, or in the dashboard: the user selects their email at the top right to open the account menu, chooses **Your profile** (`/me`), then uploads the avatar on the **Profile** tab and the background photo on the **Design** tab. The older tool names `create_uplist`, `update_uplist`, and `get_uplist` still work but are no longer listed.
+Call `get_public_profile` first. If there is no profile, ask the user for their display name, a short bio, an optional https avatar image URL, the links (say which, if any, to pin), and the handle they want, then call `save_profile` with them. To change it, call `save_profile` with only what changes: profile, theme, handle, or projects (pass `projects` as their site slugs, in order), and the `version` from `get_public_profile` as `expectedVersion`; use `set_links` for link changes. Images can also be uploaded with `attim profile avatar` / `attim profile background`, or in the dashboard: the user selects their email at the top right to open the account menu, chooses **Your profile** (`/me`), then uploads the avatar on the **Profile** tab and the background photo on the **Design** tab. The older tool names `create_profile`, `update_profile`, `create_uplist`, `update_uplist`, and `get_uplist` still work but are no longer listed.
 
 ```bash
 npx attim profile create ada --name "Ada Lovelace" --bio "Engines and ideas" --pin "Newsletter=https://news.example.com/" --link "Talks=https://talks.example.com/"
@@ -270,7 +282,7 @@ npx attim links remove my-links lk_0123456789abcdef
 npx attim links stats my-links --days 30
 ```
 
-Template contract for custom designs (full text: `get_link_page_template` or https://attim.link/docs/features/link-pages):
+Template contract for custom designs (full text and the official template: https://attim.link/docs/features/link-pages, or the unlisted `get_link_page_template` MCP tool called by name):
 
 - Place each placeholder once where its list belongs; `{{ attim.links.all }}` renders both lists and `{{ attim.links.json }}` gives `{ id, section, position, label, href }` items for script-rendered pages (keep `href` so clicks count).
 - Never hand-write the link `<a>` tags; they are not tracked. Style `.attim-link`, `.attim-links`, `[data-attim-section="pinned"]`, and hide empty lists with `[data-attim-empty]`.
@@ -415,8 +427,8 @@ Placeholders (`{{ vars.API_BASE_URL }}`) are replaced at serve time. Only use va
 
 ### Build a link-in-bio page
 
-1. Call `get_public_profile`. Without a profile, ask the user for their display name, a short bio, an optional https avatar URL, the links (and which, at most 2, to pin), and the handle they want, then call `create_profile`. With one, use `update_profile` for the profile, theme, handle, or projects, and `set_links` for links. Hand off the profile link.
-2. Only when a developer wants their own markup: call `get_link_page_template`, write HTML that follows its contract, publish it with `publish_site`, set the `LINKS_*` (or your own) variables with `set_variables`, then add links with `set_links`. `create_link_page` publishes the official template with theme values and links in one call.
+1. Call `get_public_profile`. Without a profile, ask the user for their display name, a short bio, an optional https avatar URL, the links (and which, at most 2, to pin), and the handle they want, then call `save_profile`. With one, use `save_profile` for the profile, theme, handle, or projects, and `set_links` for links. Hand off the profile link.
+2. Only when a developer wants their own markup: write HTML that follows the contract above (or start from the template in the docs), publish it with `publish_site`, set the `LINKS_*` (or your own) variables with `set_variables`, then add links with `set_links`. The unlisted `create_link_page` tool, called by name, publishes the official template with theme values and links in one call.
 3. To change links later, call `list_links` first and pass each kept link's `id` back to `set_links` so its click history survives. Links you omit are deleted.
 4. Use `get_link_stats` to report clicks and why each link sits where it does.
 
@@ -468,22 +480,21 @@ For owned sites and account tools, connect an ATTIM account through the MCP host
 
 Modern MCP clients use `server/discover` and send protocol metadata and authentication on each request; no MCP session is created. Older clients using `initialize` may receive a session token in the response body or `Mcp-Session-Token` header. Preserve it for later tool calls and close it with `DELETE /mcp` when needed. OAuth clients send their access token on each call.
 
-Without a connected account, `publish_site` and `clone_site` create temporary sites that last up to 12 hours. Tell the user how long the link stays live and offer to keep it by email with `claim_site`. Do not make a temporary site for a user who is signed in.
+Without a connected account, `publish_site` and `copy_site` create temporary sites that last up to 12 hours. Tell the user how long the link stays live and offer to keep it by email with `claim_site`. Do not make a temporary site for a user who is signed in.
 
 Available MCP tools:
 
 | Tool | Purpose | Requires account |
 | --- | --- | --- |
 | `publish_site` | Publish a new site from inline files | No (temporary site); sign in for an owned site |
-| `clone_site` | Clone an anonymous live site into a new anonymous site | No |
-| `fork_site` | Fork an anonymous site into an owned site | Yes |
+| `copy_site` | Copy a live temporary site to a new link: permanent in the connected account, or temporary with its own `claimToken` without one | No (temporary copy); sign in for an owned copy |
 | `claim_site` | Keep a temporary site with its slug and `claimToken`: move it into the connected account, or with the user's `email`, email them a link that keeps it and creates their free account | No with an `email`; without one, the user is asked to connect an account |
 | `update_site` | Replace every file of a site with a new version | Yes, or claim token |
 | `read_site` | Open a site published before: live `versionId`, file list, and text of HTML, CSS, and JS files, in pages; `search` finds text | Yes, or claim token; Team viewers can read |
 | `edit_site` | Change a live site at the same link with exact replacements, whole-file writes, and deletes, as a new named version | Yes, or claim token; owner or editor |
-| `finalize_site` | Promote a pending version to live | Yes, or claim token |
 | `delete_site` | Delete a site | Yes, or claim token |
 | `rename_site` | Change an owned site's slug | Yes; paid plan |
+| `update_site_details` | Change the title and description ATTIM shows for a site (dashboard, profile project cards; not its HTML), or whether search engines may list it; fields left out stay, `null` clears | Yes; owner or editor |
 | `list_sites` | List owned sites, one line each with title and link | Yes |
 | `list_versions` | List retained versions and the live version ID for an owned project | Yes |
 | `rename_version` | Set or clear a retained version's name | Yes; owner or editor |
@@ -492,20 +503,19 @@ Available MCP tools:
 | `restore_version` | Copy retained files into a new live version | Yes; owner or editor |
 | `set_variables` | Set public variables on an owned site | Yes |
 | `set_password_protection` | Enable or change owned-site protection; maintain grandfathered anonymous protection | Yes, or claim token for an already protected anonymous site |
-| `create_profile` | Set up the account's profile, its one link-in-bio page: name, bio, socials, theme, links, projects, and handle | Yes |
-| `update_profile` | Change the profile, social icons, theme, language, handle, links, or projects | Yes |
+| `save_profile` | Set up the account's profile, its one link-in-bio page, or change it: name, bio, socials, theme, language, links, projects, and handle | Yes |
 | `get_public_profile` | Read the profile with its links and projects, or `profile: null` before set-up | Yes |
-| `create_link_page` | Publish the official link page template with theme values and links set | Yes |
 | `list_links` | List a link page's links, ids, and visible positions | Yes |
 | `set_links` | Replace every link on a link page; pass ids to keep click history | Yes; owner or editor |
 | `get_link_stats` | Link page views, clicks, click-through rate, and position reasons | Yes |
 | `get_insights` | Page views and visitors from people, AI agents (by name) and other bots counted apart, and top sites, referrers, and countries, for every site or one | Yes; Hobby or Team plan |
-| `get_link_page_template` | Official link page HTML, theme variables, and placeholder contract | Yes |
 | `get_profile` | Identify the connected account | Yes |
+
+Not listed, but still callable by name for saved prompts and scripts: `clone_site` (always a temporary copy) and `fork_site` (now `copy_site`), `create_profile` and `update_profile` (now `save_profile`), `finalize_site` (makes a version published with `finalize: false` live), and the developer tools `create_link_page` and `get_link_page_template`.
 
 A tool that runs and fails answers with `isError: true`: its text says what went wrong and what to do next, and `_meta["attim/error"]` carries the `code`, `status`, and details such as `retryAfterSeconds`. Fix the call from that hint instead of switching paths. Site results' `structuredContent` has `slug`, `siteUrl`, `status` (`live` or `pending`), and `versionId`, plus `expiresAt` and the new `claimToken` for a temporary site; upload links and internal IDs are never included. AI apps with MCP Apps, such as Claude and ChatGPT, also show the site in a card with a preview, **Open site**, and, for a temporary site, **Keep this link**.
 
-MCP file arguments are inline objects with `path` and either `content` or `contentBase64`. Root `index.html` is still required for static site publishes. A temporary publish returns a one-time `claimToken`; pass it to later update, finalize, or delete calls. Preserve it for user handoff without adding it to public files.
+MCP file arguments are inline objects with `path` and either `content` or `contentBase64`. Root `index.html` is still required for static site publishes. A temporary publish returns a one-time `claimToken`; pass it to later read, edit, update, or delete calls. Preserve it for user handoff without adding it to public files.
 
 For version tools, use the project `slug` and the permanent `versionId` returned by `list_versions({"slug":"my-site"})`. To name version 12, call `rename_version({"slug":"my-site","versionId":"12","name":"Before redesign"})`; pass `name: null` to clear it. `preview_version` returns a one-use URL. `download_version` returns an `attim://versions/{slug}/{versionId}/download` resource link; read that resource with account authentication to receive the ZIP as base64 `application/zip` content. Do not treat the URI as a public download URL.
 
@@ -528,7 +538,7 @@ To change a site published before, in this chat or another, do not rebuild it. R
    Copy `oldText` exactly from `read_site`, with enough surrounding text to appear once, or set `replaceAll`. Use `writes` for new or fully rewritten files and `deletes` to remove files. Only the last 10 versions are kept, so many small edits push out the version from before the chat.
 4. Report the same link and the new version name. For an owned site, the version from before the change can be restored with `restore_version`.
 
-On `ATTIM_EDIT_NO_MATCH` or `ATTIM_EDIT_AMBIGUOUS`, read or `search` again and fix `oldText`. On `ATTIM_VERSION_CONFLICT`, the site changed in the meantime: read it again and redo the edit on the current text. Keep `{{ vars.* }}` and `{{ attim.links.* }}` placeholders as they are. Use `update_site` only to replace the whole site. A temporary site can only be changed with its `claimToken`, so if the user may want to change it later in another chat, ask for their email and keep it with `claim_site` first. Profiles and managed link pages are not edited as files; use `update_profile` or `set_links`. Confirm with the user before changing a live site.
+On `ATTIM_EDIT_NO_MATCH` or `ATTIM_EDIT_AMBIGUOUS`, read or `search` again and fix `oldText`. On `ATTIM_VERSION_CONFLICT`, the site changed in the meantime: read it again and redo the edit on the current text. Keep `{{ vars.* }}` and `{{ attim.links.* }}` placeholders as they are. Use `update_site` only to replace the whole site. A temporary site can only be changed with its `claimToken`, so if the user may want to change it later in another chat, ask for their email and keep it with `claim_site` first. Profiles and managed link pages are not edited as files; use `save_profile` or `set_links`. Confirm with the user before changing a live site.
 
 ## MCP setup examples
 
