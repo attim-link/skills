@@ -17,7 +17,7 @@ description: >
 
 # ATTIM
 
-**Skill version: 2.11.0**
+**Skill version: 2.12.0**
 
 ATTIM lets agents publish static artifacts to live URLs at `{slug}.attim.link`.
 
@@ -196,6 +196,18 @@ npx attim list --workspace 1
 
 - Anonymous sites require `--claim-token` or `ATTIM_CLAIM_TOKEN` for finalize and delete.
 - Claimed sites require an account API token (stored, `--token`, or `ATTIM_API_TOKEN`).
+
+### Site details
+
+```bash
+npx attim details my-site --title "Launch notes" --description "What shipped in May"
+npx attim details my-site --search-indexing on
+npx attim details my-site --description ""
+```
+
+- Changes the title and description ATTIM shows for an owned site (dashboard, profile project cards) and whether search engines may list it. It does not change the page's own HTML; to change its `<title>`, edit the files.
+- Anything left out stays; an empty value clears it. Titles are up to 120 characters, descriptions up to 500.
+- Sites are hidden from search until indexing is turned on; the profile is listed until it is turned off (use the handle as the slug). `attim info` shows the current details. MCP: `update_site_details`.
 
 ### Project versions
 
@@ -482,6 +494,7 @@ Available MCP tools:
 | `edit_site` | Change a live site at the same link with exact replacements, whole-file writes, and deletes, as a new named version | Yes, or claim token; owner or editor |
 | `delete_site` | Delete a site | Yes, or claim token |
 | `rename_site` | Change an owned site's slug | Yes; paid plan |
+| `update_site_details` | Change the title and description ATTIM shows for a site (dashboard, profile project cards; not its HTML), or whether search engines may list it; fields left out stay, `null` clears | Yes; owner or editor |
 | `list_sites` | List owned sites, one line each with title and link | Yes |
 | `list_versions` | List retained versions and the live version ID for an owned project | Yes |
 | `rename_version` | Set or clear a retained version's name | Yes; owner or editor |

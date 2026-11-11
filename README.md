@@ -44,6 +44,7 @@ https://github.com/attim-link/skills/tree/main/attim
 - Respect the email limit: one sign-in code, claim link, or workspace invitation per address a minute
 - Configure password protection, with `--password-stdin` to keep the password out of shell history
 - Configure public variables
+- Change a site's title, description, and search indexing with `attim details` or the `update_site_details` MCP tool
 - List, name, preview, download, and restore project versions
 - Set up or change the ATTIM profile, with the CLI or the `save_profile` MCP tool: one public link-in-bio page per account with links, social icons, a theme, and the user's ATTIM projects
 - Build custom link pages and manage their links and click stats
