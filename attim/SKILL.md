@@ -17,7 +17,7 @@ description: >
 
 # ATTIM
 
-**Skill version: 2.12.0**
+**Skill version: 2.13.0**
 
 ATTIM lets agents publish static artifacts to live URLs at `{slug}.attim.link`.
 
@@ -80,8 +80,9 @@ Choose by the location of the files and the requested operation. Check which too
 | Set up the user's profile (link in bio, Linktree-style page) | MCP `get_public_profile`, then `save_profile` | CLI `profile create` |
 | Change the profile's name, bio, social icons, theme, language, handle, or projects | MCP `get_public_profile` / `save_profile` | CLI `profile show` / `profile set` / `profile theme` / `profile projects` |
 | Design a custom link page with your own markup (developers) | Write HTML to the contract below, `publish_site`, then `set_links` | Publish the template from the docs, then CLI `links set` |
-| Add, edit, reorder, or count clicks on profile or link page links | MCP `list_links` / `set_links` / `get_link_stats` | CLI `links list` / `links set` / `links stats` |
-| See how sites are doing: views and visitors from people, AI agents, and other bots | MCP `get_insights` | CLI `insights` |
+| Add, change, move, or remove a few profile or link page links | MCP `list_links`, then `edit_links` | CLI `links add` / `links edit` / `links move` / `links remove` |
+| Replace every link, or count clicks and views | MCP `set_links` / `get_link_stats` | CLI `links set` / `links stats` |
+| See how sites are doing: views and visitors from people, AI assistants, AI crawlers, and other bots | MCP `get_insights` | CLI `insights` |
 | Identify the connected account | MCP `get_profile` | CLI `whoami` |
 | Keep (claim) a temporary site | MCP `claim_site` with its slug and `claimToken`, plus the user's email when no account is connected | CLI `claim` |
 | Inspect local CLI setup, or list/delete public variables | CLI or ATTIM web UI | Raw API where that operation is supported |
@@ -257,7 +258,7 @@ Each ATTIM account has one profile: a public page at `<handle>.attim.link` that 
 
 The handle is free on every plan; on Free it can change once a week, and the old address redirects for 30 days. The profile is public and can appear in search results unless the user turns that off; it cannot be password-protected and does not count toward the plan's project limit. Projects stay hidden from search unless the user turns search on for each one.
 
-Call `get_public_profile` first. If there is no profile, ask the user for their display name, a short bio, an optional https avatar image URL, the links (say which, if any, to pin), and the handle they want, then call `save_profile` with them. To change it, call `save_profile` with only what changes: profile, theme, handle, or projects (pass `projects` as their site slugs, in order), and the `version` from `get_public_profile` as `expectedVersion`; use `set_links` for link changes. Images can also be uploaded with `attim profile avatar` / `attim profile background`, or in the dashboard: the user selects their email at the top right to open the account menu, chooses **Your profile** (`/me`), then uploads the avatar on the **Profile** tab and the background photo on the **Design** tab. The older tool names `create_profile`, `update_profile`, `create_uplist`, `update_uplist`, and `get_uplist` still work but are no longer listed.
+Call `get_public_profile` first. If there is no profile, ask the user for their display name, a short bio, an optional https avatar image URL, the links (say which, if any, to pin), and the handle they want, then call `save_profile` with them. To change it, call `save_profile` with only what changes: profile, theme, handle, or projects (pass `projects` as their site slugs, in order), and the `version` from `get_public_profile` as `expectedVersion`; use `edit_links` for link changes. If any field is wrong, `save_profile` changes nothing, the handle included. Images can also be uploaded with `attim profile avatar` / `attim profile background`, or in the dashboard: the user selects their email at the top right to open the account menu, chooses **Your profile** (`/me`), then uploads the avatar on the **Profile** tab and the background photo on the **Design** tab. The older tool names `create_profile`, `update_profile`, `create_uplist`, `update_uplist`, and `get_uplist` still work but are no longer listed.
 
 ```bash
 npx attim profile create ada --name "Ada Lovelace" --bio "Engines and ideas" --pin "Newsletter=https://news.example.com/" --link "Talks=https://talks.example.com/"
@@ -291,7 +292,7 @@ Template contract for custom designs (full text and the official template: https
 
 ### Insights
 
-On the Hobby and Team plans, `insights` shows how the account's sites are doing: page views and visitors from people first, then AI agents (by name) and other bots, counted apart, with the top sites, referrers, and countries (which count people).
+On the Hobby and Team plans, `insights` shows how the account's sites are doing: page views and visitors from people first, then AI assistants, AI crawlers (both by name), and other bots, counted apart, with the top sites, referrers, and countries (which count people).
 
 ```bash
 npx attim insights
@@ -427,10 +428,10 @@ Placeholders (`{{ vars.API_BASE_URL }}`) are replaced at serve time. Only use va
 
 ### Build a link-in-bio page
 
-1. Call `get_public_profile`. Without a profile, ask the user for their display name, a short bio, an optional https avatar URL, the links (and which, at most 2, to pin), and the handle they want, then call `save_profile`. With one, use `save_profile` for the profile, theme, handle, or projects, and `set_links` for links. Hand off the profile link.
+1. Call `get_public_profile`. Without a profile, ask the user for their display name, a short bio, an optional https avatar URL, the links (and which, at most 2, to pin), and the handle they want, then call `save_profile`. With one, use `save_profile` for the profile, theme, handle, or projects, and `edit_links` for links. Hand off the profile link.
 2. Only when a developer wants their own markup: write HTML that follows the contract above (or start from the template in the docs), publish it with `publish_site`, set the `LINKS_*` (or your own) variables with `set_variables`, then add links with `set_links`. The unlisted `create_link_page` tool, called by name, publishes the official template with theme values and links in one call.
-3. To change links later, call `list_links` first and pass each kept link's `id` back to `set_links` so its click history survives. Links you omit are deleted.
-4. Use `get_link_stats` to report clicks and why each link sits where it does.
+3. To change links later, call `list_links` for the ids and `version`, then `edit_links` with only the changes, such as `{ "op": "add", "label": "Tour", "url": "https://…", "group": "Music" }`, `{ "op": "update", "id": "lk_…", "label": "Shop the drop" }`, `{ "op": "move", "id": "lk_…", "position": 0 }` (0-based, among the pinned links or within the group), or `{ "op": "remove", "id": "lk_…" }`, plus `expectedVersion`. Every other link keeps its place and clicks, and the changes are saved together or not at all. Removing a link deletes its click counts, so say so before removing; `{ "op": "update", "id": "lk_…", "disabled": true }` hides it and keeps them. Use `set_links` only to replace the whole list, passing each kept link's `id`.
+4. Use `get_link_stats` to report views, visitors, and clicks: it lists links from most to least clicked, with each one's click rate (clicks divided by views). The owner's own visits count too.
 
 ### Make an interactive page usable by browser agents
 
@@ -506,9 +507,10 @@ Available MCP tools:
 | `save_profile` | Set up the account's profile, its one link-in-bio page, or change it: name, bio, socials, theme, language, links, projects, and handle | Yes |
 | `get_public_profile` | Read the profile with its links and projects, or `profile: null` before set-up | Yes |
 | `list_links` | List a link page's links, ids, and visible positions | Yes |
+| `edit_links` | Add, update, move, or remove a few links; the others stay as they are; all saved or none | Yes; owner or editor |
 | `set_links` | Replace every link on a link page; pass ids to keep click history | Yes; owner or editor |
-| `get_link_stats` | Link page views, clicks, click-through rate, and position reasons | Yes |
-| `get_insights` | Page views and visitors from people, AI agents (by name) and other bots counted apart, and top sites, referrers, and countries, for every site or one | Yes; Hobby or Team plan |
+| `get_link_stats` | Profile or link page views and visitors (as in Insights), clicks per day, each link's clicks and click rate, and position reasons | Yes |
+| `get_insights` | Page views and visitors from people, AI assistants and AI crawlers (by name) and other bots counted apart, and top sites, referrers, and countries, for every site or one | Yes; Hobby or Team plan |
 | `get_profile` | Identify the connected account | Yes |
 
 Not listed, but still callable by name for saved prompts and scripts: `clone_site` (always a temporary copy) and `fork_site` (now `copy_site`), `create_profile` and `update_profile` (now `save_profile`), `finalize_site` (makes a version published with `finalize: false` live), and the developer tools `create_link_page` and `get_link_page_template`.
@@ -519,7 +521,7 @@ MCP file arguments are inline objects with `path` and either `content` or `conte
 
 For version tools, use the project `slug` and the permanent `versionId` returned by `list_versions({"slug":"my-site"})`. To name version 12, call `rename_version({"slug":"my-site","versionId":"12","name":"Before redesign"})`; pass `name: null` to clear it. `preview_version` returns a one-use URL. `download_version` returns an `attim://versions/{slug}/{versionId}/download` resource link; read that resource with account authentication to receive the ZIP as base64 `application/zip` content. Do not treat the URI as a public download URL.
 
-When the user asks how a page or their sites are doing, call `get_insights` with the site's `slug` or link, or with no slug for every site; `days` is 7, 30, or 90 (30 by default) and `workspaceId` reads a team Workspace. Report people first (`pageViews` and `visitors` count people only, as do `topSites`, `topReferrers`, and `topCountries`), then `aiAgents` with `topAgents` by name, then `bots`. On `ATTIM_ANALYTICS_PLAN_REQUIRED`, pass the hint on: Insights come with the Hobby and Team plans.
+When the user asks how a page or their sites are doing, call `get_insights` with the site's `slug` or link, or with no slug for every site; `days` is 7, 30, or 90 (30 by default) and `workspaceId` reads a team Workspace. Report people first (`pageViews` and `visitors` count people only, as do `topSites`, `topReferrers`, and `topCountries`), then AI assistants (`aiAgents.assistants`: someone asked an AI such as ChatGPT to read the page), then AI crawlers (`aiAgents.crawlers`: collected for AI search or training), each with its `topAgents` entries by `kind`, then `bots`. On `ATTIM_ANALYTICS_PLAN_REQUIRED`, pass the hint on: Insights come with the Hobby and Team plans.
 
 Before `restore_version`, use `list_versions` to get `currentVersionId`, then call `restore_version({"slug":"my-site","versionId":"12","expectedCurrentVersionId":"<currentVersionId>"})`. The expected ID protects against overwriting a newer publish. On conflict, list again and ask the user to reconsider the now-current version before retrying.
 
@@ -538,7 +540,7 @@ To change a site published before, in this chat or another, do not rebuild it. R
    Copy `oldText` exactly from `read_site`, with enough surrounding text to appear once, or set `replaceAll`. Use `writes` for new or fully rewritten files and `deletes` to remove files. Only the last 10 versions are kept, so many small edits push out the version from before the chat.
 4. Report the same link and the new version name. For an owned site, the version from before the change can be restored with `restore_version`.
 
-On `ATTIM_EDIT_NO_MATCH` or `ATTIM_EDIT_AMBIGUOUS`, read or `search` again and fix `oldText`. On `ATTIM_VERSION_CONFLICT`, the site changed in the meantime: read it again and redo the edit on the current text. Keep `{{ vars.* }}` and `{{ attim.links.* }}` placeholders as they are. Use `update_site` only to replace the whole site. A temporary site can only be changed with its `claimToken`, so if the user may want to change it later in another chat, ask for their email and keep it with `claim_site` first. Profiles and managed link pages are not edited as files; use `save_profile` or `set_links`. Confirm with the user before changing a live site.
+On `ATTIM_EDIT_NO_MATCH` or `ATTIM_EDIT_AMBIGUOUS`, read or `search` again and fix `oldText`. On `ATTIM_VERSION_CONFLICT`, the site changed in the meantime: read it again and redo the edit on the current text. Keep `{{ vars.* }}` and `{{ attim.links.* }}` placeholders as they are. Use `update_site` only to replace the whole site. A temporary site can only be changed with its `claimToken`, so if the user may want to change it later in another chat, ask for their email and keep it with `claim_site` first. Profiles and managed link pages are not edited as files; use `save_profile` or `edit_links`. Confirm with the user before changing a live site.
 
 ## MCP setup examples
 
@@ -641,6 +643,7 @@ PUT    /api/publish/:slug/variables/:name
 DELETE /api/publish/:slug/variables/:name
 GET    /api/publish/:slug/links
 PUT    /api/publish/:slug/links
+PATCH  /api/publish/:slug/links                     # { changes: [{ op, id?, ... }], expectedVersion? }
 POST   /api/publish/:slug/links
 PUT    /api/publish/:slug/links/order
 PATCH  /api/publish/:slug/links/settings
@@ -730,7 +733,8 @@ If command output is long or may be truncated, print or save the handoff fields 
 - Never print, commit, or paste account tokens into public files.
 - Do not retry a sign-in code, sign-in link, claim-link, or invitation request that returned `429 ATTIM_EMAIL_COOLDOWN`. Ask the user to use the code or link already emailed, or wait `retryAfterSeconds`; a new sign-in code retires the previous one.
 - Do not hand-write tracked links on a link page; render them with `{{ attim.links.* }}` placeholders.
-- Do not call `set_links` without ids from `list_links` when the user wants to keep click history; omitted links are deleted.
+- Do not use `set_links` for a change to one or a few links; use `edit_links`. When you do use `set_links`, pass ids from `list_links`; omitted links are deleted with their click counts.
+- Do not remove a link or delete a profile without telling the user that its click counts go too; hiding a link keeps them.
 - Do not pin more than 2 links, and do not expect clone or fork to copy a link page's links.
 
 ## Quick copy block

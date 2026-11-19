@@ -47,8 +47,9 @@ https://github.com/attim-link/skills/tree/main/attim
 - Change a site's title, description, and search indexing with `attim details` or the `update_site_details` MCP tool
 - List, name, preview, download, and restore project versions
 - Set up or change the ATTIM profile, with the CLI or the `save_profile` MCP tool: one public link-in-bio page per account with links, social icons, a theme, and the user's ATTIM projects
-- Build custom link pages and manage their links and click stats
-- See how sites are doing with `attim insights` or the `get_insights` MCP tool: people, AI agents, and other bots counted apart (Hobby and Team plans)
+- Add, change, move, or remove a few profile or link page links with the `edit_links` MCP tool or `attim links edit` / `attim links move`, leaving the other links and their clicks as they are
+- Build custom link pages and see views, visitors, and clicks for each link
+- See how sites are doing with `attim insights` or the `get_insights` MCP tool: people, AI assistants, AI crawlers, and other bots counted apart (Hobby and Team plans)
 - Register WebMCP tools on interactive pages so AI agents in the browser can use them
 - Target workspaces
 - Use ATTIM MCP when the host agent supports MCP
